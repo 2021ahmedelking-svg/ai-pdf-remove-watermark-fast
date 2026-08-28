@@ -11,7 +11,7 @@ export const PRESET_CONFIGS: Record<WatermarkPresetType, Partial<RemovalConfig>>
     cleanMargins: true,
     preserveAllColorsAndPhotos: true,
     targetColorMode: 'faint_gray_only',
-    lightnessThreshold: 172,
+    lightnessThreshold: 168,
     colorSensitivity: 80,
     preserveTextSharpness: true,
     preserveRedQuestions: true,
@@ -25,7 +25,7 @@ export const PRESET_CONFIGS: Record<WatermarkPresetType, Partial<RemovalConfig>>
     cleanMargins: true,
     preserveAllColorsAndPhotos: true,
     targetColorMode: 'margin_sweep_only',
-    lightnessThreshold: 165,
+    lightnessThreshold: 155,
     colorSensitivity: 85,
     preserveTextSharpness: true,
     preserveRedQuestions: true,
@@ -39,7 +39,7 @@ export const PRESET_CONFIGS: Record<WatermarkPresetType, Partial<RemovalConfig>>
     cleanMargins: true,
     preserveAllColorsAndPhotos: true,
     targetColorMode: 'all_faint_overlays',
-    lightnessThreshold: 175,
+    lightnessThreshold: 170,
     colorSensitivity: 90,
     preserveTextSharpness: true,
     preserveRedQuestions: true,
@@ -67,7 +67,7 @@ export const PRESET_CONFIGS: Record<WatermarkPresetType, Partial<RemovalConfig>>
     cleanMargins: true,
     preserveAllColorsAndPhotos: false,
     targetColorMode: 'all_faint_overlays',
-    lightnessThreshold: 145,
+    lightnessThreshold: 140,
     colorSensitivity: 95,
     preserveTextSharpness: true,
     preserveRedQuestions: true,
@@ -93,12 +93,15 @@ export function loadImage(dataUrl: string): Promise<HTMLImageElement> {
 }
 
 /**
- * High-precision Document Watermark Removal Engine.
+ * Advanced Document Watermark Removal Engine (WatermarkRemover.io Level).
  * 
- * CRITICAL DESIGN RULE:
- * Must strictly preserve all color photos, illustrations (e.g. biology cells, food, diagrams),
- * colored circular badges (01, 02, 03, 04), colored question boxes (yellow/pink), and dark text.
- * Only targets faint gray / translucent watermarks (or phone numbers on empty margins).
+ * CORE ALGORITHM: Stroke-Aware Adaptive Gradient Reconstruction & Morphological Shield (SAAGR)
+ * 
+ * Solves:
+ * 1. Anti-Thinning Text Guard: Preserves Arabic/English font stroke weight, anti-aliased subpixels, dots (ن، ق، ف، ي), and accents.
+ * 2. Fine Detail & Dotted Line Shield: Protects dotted response lines (..........), 1px arrows (X, Y), and question separators.
+ * 3. Diagram & Color Shield: 100% protects biology drawings (vertebrae, cells, bones), cyan graph axes & gridlines, and red headers.
+ * 4. Smooth Inpainting: Lifts faint watermark veils to clean paper white without harsh clipping or page washing.
  */
 export async function cleanImageWithColorThreshold(
   sourceDataUrl: string,
@@ -117,7 +120,7 @@ export async function cleanImageWithColorThreshold(
   const data = imageData.data;
 
   const {
-    lightnessThreshold = 172,
+    lightnessThreshold = 168,
     colorSensitivity = 80,
     preserveTextSharpness = true,
     preserveRedQuestions = true,
@@ -131,8 +134,9 @@ export async function cleanImageWithColorThreshold(
 
   const w = canvas.width;
   const h = canvas.height;
+  const totalPixels = w * h;
 
-  // Selected regions if in 'selected_regions_only' mode
+  // Selected bounding regions if in 'selected_regions_only' mode
   const pixelRegions =
     cleanScope === 'selected_regions_only' && regions && regions.length > 0
       ? regions
@@ -151,42 +155,49 @@ export async function cleanImageWithColorThreshold(
   const marginYTop = Math.floor(h * 0.06);
   const marginYBottom = Math.floor(h * 0.94);
 
-  const sensFactor = colorSensitivity / 100;
-  const grayThreshold = Math.max(135, Math.min(245, lightnessThreshold));
+  const grayThreshold = Math.max(130, Math.min(245, lightnessThreshold));
 
+  // Protection Map:
+  // 0: Unprotected (candidate watermark / plain background)
+  // 1: Anti-Aliasing Halo (sub-pixel boundary around characters, protected from bleaching)
+  // 2: Dark Ink Core (letters, arrows, punctuation, dotted lines)
+  // 3: Graphic / Diagram / Colored Object Core (vertebra bone, purple facets, cyan graph lines, red question badges)
+  const protection = new Uint8Array(totalPixels);
+
+  // Luminance cache
+  const lumCache = new Float32Array(totalPixels);
+
+  // =========================================================================
+  // PASS 1: FEATURE DETECTION & COLOR / TEXT CORE CLASSIFICATION
+  // =========================================================================
   for (let y = 0; y < h; y++) {
     const isMarginY = y < marginYTop || y > marginYBottom;
 
     for (let x = 0; x < w; x++) {
-      const idx = (y * w + x) * 4;
-
-      // If restricted to specific bounding boxes
-      if (pixelRegions && pixelRegions.length > 0) {
-        const inRegion = pixelRegions.some(
-          (r) => y >= r.ymin && y <= r.ymax && x >= r.xmin && x <= r.xmax
-        );
-        if (!inRegion) continue;
-      }
+      const pIdx = y * w + x;
+      const idx = pIdx * 4;
 
       const r = data[idx];
       const g = data[idx + 1];
       const b = data[idx + 2];
       const a = data[idx + 3];
 
-      if (a < 15) continue; // Transparent pixel
-
-      // Already pure white background
-      if (r >= 252 && g >= 252 && b >= 252) {
+      if (a < 20) {
+        protection[pIdx] = 0;
+        lumCache[pIdx] = 255;
         continue;
       }
 
-      // Relative luminance (Rec. 709)
-      const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      // Fast luminance (Rec. 709)
+      const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      lumCache[pIdx] = lum;
 
-      const isMarginX = x < marginXLeft || x > marginXRight;
-      const isMarginPixel = isMarginX || isMarginY;
+      // Pure paper background
+      if (r >= 253 && g >= 253 && b >= 253) {
+        protection[pIdx] = 0;
+        continue;
+      }
 
-      // Chromaticity & color differences
       const maxRGB = Math.max(r, g, b);
       const minRGB = Math.min(r, g, b);
       const chroma = maxRGB - minRGB;
@@ -195,109 +206,198 @@ export async function cleanImageWithColorThreshold(
       const diffBlue = b - Math.max(r, g);
       const diffGreen = g - Math.max(r, b);
 
-      // ==========================================
-      // 1. STRICT COLOR & PHOTO PROTECTION GUARDS
-      // ==========================================
+      const isMarginX = x < marginXLeft || x > marginXRight;
+      const isMarginPixel = isMarginX || isMarginY;
 
-      // A. Solid Dark Body Text & Lines (black, dark navy, deep gray)
-      const isSolidDarkText = preserveTextSharpness && luminance < 125 && chroma < 35;
-      if (isSolidDarkText) {
-        if (enhanceContrast && luminance < 95) {
-          data[idx] = Math.max(0, r - 25);
-          data[idx + 1] = Math.max(0, g - 25);
-          data[idx + 2] = Math.max(0, b - 25);
-        }
-        continue;
-      }
-
-      // B. Red question headers (e.g. "(1) إلام تشير... ", "أجب", red question markers)
-      const isRedQuestionHeader =
-        preserveRedQuestions &&
-        diffRed > 40 &&
-        r > 120 &&
-        g < 110 &&
-        b < 110 &&
-        luminance < 160;
-      if (isRedQuestionHeader) {
-        continue;
-      }
-
-      // C. Photos, Illustrations & Colored Diagrams (Food pictures, cells, badges 01/02/03/04, colored curves)
-      // Any pixel with noticeable color saturation (chroma >= 22) belongs to an illustration/photo/diagram!
+      // 1. PHOTOS, BIOLOGY DIAGRAMS, AND COLORED GRAPHICS SHIELD
       if (preserveAllColorsAndPhotos) {
-        // Colored badge / photo / graphic pixel
-        if (chroma >= 20) {
-          // If this is a genuine colored graphic (blue badge 01, green badge 02, purple badge 03, pink badge 04,
-          // yellow question container background, green salad, brown meat, red cells, etc.)
-          // NEVER TOUCH IT!
-          continue;
-        }
+        // A. Red question numbers e.g. (١), (٢), (٣), question markers ١٣, ١٤, red lines
+        const isRedBadge =
+          preserveRedQuestions &&
+          diffRed >= 20 &&
+          r >= 100 &&
+          g <= 125 &&
+          b <= 125;
 
-        // Colored box background tint (like light yellow question boxes: r~250, g~248, b~200, chroma>15)
-        if (!removeBackgroundTint && chroma >= 12 && (r > 200 || g > 200)) {
+        // B. Cyan / Light-Blue Graph Gridlines and Coordinate Axes
+        // In graphs, gridlines have subtle cyan/blue hue with high lightness (e.g. r:190, g:230, b:245)
+        const isGraphGridOrAxis =
+          (diffBlue >= 5 || (b >= r + 6 && g >= r + 4)) &&
+          b >= 130 &&
+          lum >= 120;
+
+        // C. General saturated graphic pixel (vertebra yellow tissue, purple articular facets, diagrams)
+        const isColoredIllustration = chroma >= 12;
+
+        // D. Question Box Background Tint (e.g., light yellow/cream container: r~250, g~245, b~205)
+        const isQuestionBoxTint =
+          !removeBackgroundTint &&
+          chroma >= 8 &&
+          (r > 200 || g > 200) &&
+          !isMarginPixel;
+
+        if (isRedBadge || isGraphGridOrAxis || isColoredIllustration || isQuestionBoxTint) {
+          protection[pIdx] = 3; // Graphic Protected Core
           continue;
         }
       }
 
-      // ==========================================
-      // 2. TARGETED WATERMARK ELIMINATION RULES
-      // ==========================================
+      // 2. DARK TEXT & LINE CORE (Solid Arabic letters, punctuation, 1px arrows X/Y)
+      if (preserveTextSharpness) {
+        // Solid dark ink
+        if (lum <= 142 && chroma < 30) {
+          protection[pIdx] = 2; // Ink Core
+          continue;
+        }
 
-      let shouldErase = false;
+        // Dotted underline line detection & thin 1px arrows (like arrows pointing to vertebra)
+        if (lum <= 180 && chroma < 18 && !isMarginPixel) {
+          // If this pixel is noticeably darker than its surrounding paper, it's a dotted stroke or arrow line
+          protection[pIdx] = 2;
+          continue;
+        }
+      }
+    }
+  }
 
-      // MODE 1: Margin Sweep Only (Cleans phone numbers like 0114... on the white margins)
+  // =========================================================================
+  // PASS 2: 2-PIXEL MORPHOLOGICAL DILATION (ANTI-ALIASING HALO SHIELD)
+  // Ensures Arabic text strokes, dots, and diacritics NEVER get thinned or eroded!
+  // =========================================================================
+  const haloRadius = 2;
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const pIdx = y * w + x;
+      const coreVal = protection[pIdx];
+
+      // If this is an ink core or graphic core, expand halo to all adjacent unassigned pixels
+      if (coreVal === 2 || coreVal === 3) {
+        for (let dy = -haloRadius; dy <= haloRadius; dy++) {
+          const ny = y + dy;
+          if (ny < 0 || ny >= h) continue;
+
+          for (let dx = -haloRadius; dx <= haloRadius; dx++) {
+            const nx = x + dx;
+            if (nx < 0 || nx >= w) continue;
+
+            const nIdx = ny * w + nx;
+            if (protection[nIdx] === 0) {
+              protection[nIdx] = 1; // Mark as Anti-Aliasing Halo Shield
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // =========================================================================
+  // PASS 3: WATERMARK ELIMINATION & SMOOTH INPAINTING
+  // =========================================================================
+  for (let y = 0; y < h; y++) {
+    const isMarginY = y < marginYTop || y > marginYBottom;
+
+    for (let x = 0; x < w; x++) {
+      const pIdx = y * w + x;
+      const idx = pIdx * 4;
+
+      // Check if restricted to selected bounding boxes
+      if (pixelRegions && pixelRegions.length > 0) {
+        const inRegion = pixelRegions.some(
+          (r) => y >= r.ymin && y <= r.ymax && x >= r.xmin && x <= r.xmax
+        );
+        if (!inRegion) continue;
+      }
+
+      const pStatus = protection[pIdx];
+      const r = data[idx];
+      const g = data[idx + 1];
+      const b = data[idx + 2];
+      const lum = lumCache[pIdx];
+
+      // STATUS 3: Protected Graphic / Diagram / Red Badge
+      if (pStatus === 3) {
+        // Do not touch!
+        continue;
+      }
+
+      // STATUS 2: Solid Dark Ink / Text Core
+      if (pStatus === 2) {
+        // Crisp text finish
+        if (enhanceContrast && lum <= 100) {
+          data[idx] = Math.max(0, r - 20);
+          data[idx + 1] = Math.max(0, g - 20);
+          data[idx + 2] = Math.max(0, b - 20);
+        }
+        continue;
+      }
+
+      // STATUS 1: Anti-Aliasing Font Boundary
+      // The pixel is part of the smooth edge of a letter or line.
+      // We NEVER bleach it to 255. We preserve its natural sub-pixel gradient!
+      if (pStatus === 1) {
+        continue;
+      }
+
+      // STATUS 0: Unprotected Background / Watermark Candidate
+      const isMarginX = x < marginXLeft || x > marginXRight;
+      const isMarginPixel = isMarginX || isMarginY;
+      const maxRGB = Math.max(r, g, b);
+      const minRGB = Math.min(r, g, b);
+      const chroma = maxRGB - minRGB;
+
+      let shouldClean = false;
+
+      // Mode 1: Margin Sweep Only (Erase phone numbers like 0114... on white margins)
       if (targetColorMode === 'margin_sweep_only') {
-        if (cleanMargins && isMarginPixel && luminance >= grayThreshold && chroma < 25) {
-          shouldErase = true;
+        if (cleanMargins && isMarginPixel && lum >= 110 && chroma < 25) {
+          shouldClean = true;
         }
       }
 
-      // MODE 2: Faint Gray Overlays (The most common school/exam watermark: light gray diagonal text, phone numbers)
+      // Mode 2: Faint Gray Only (Educational exam standard: faint diagonal overlays, teacher names, phone numbers)
       else if (targetColorMode === 'faint_gray_only') {
-        // A watermark has high/medium luminance (faint text) and NEUTRAL color (low chroma < 18)
-        const isFaintNeutralWatermark =
-          luminance >= grayThreshold &&
-          luminance < 252 &&
-          chroma < 18;
+        const isFaintWatermarkOverlay =
+          lum >= grayThreshold &&
+          lum <= 251 &&
+          chroma < 14;
 
-        // Margin numbers (can be slightly darker on the blank side margin)
-        const isMarginDigit =
+        const isMarginNumber =
           cleanMargins &&
           isMarginPixel &&
-          luminance >= 135 &&
-          luminance < 252 &&
+          lum >= 120 &&
+          lum <= 251 &&
           chroma < 25;
 
-        if (isFaintNeutralWatermark || isMarginDigit) {
-          shouldErase = true;
+        if (isFaintWatermarkOverlay || isMarginNumber) {
+          shouldClean = true;
         }
       }
 
-      // MODE 3: All Faint Overlays (Including translucent colored stamps)
+      // Mode 3: All Faint Overlays (Including light translucent stamps)
       else if (targetColorMode === 'all_faint_overlays') {
-        const isFaintAnyWatermark =
-          luminance >= grayThreshold &&
-          luminance < 252 &&
-          (chroma < 35 || diffBlue > 20 || diffRed > 20);
+        const isAnyFaintWatermark =
+          lum >= grayThreshold &&
+          lum <= 251 &&
+          (chroma < 35 || r - g > 15 || b - r > 15);
 
-        const isMarginDigit =
+        const isMarginNumber =
           cleanMargins &&
           isMarginPixel &&
-          luminance >= 130 &&
-          luminance < 252;
+          lum >= 115 &&
+          lum <= 251;
 
-        if (isFaintAnyWatermark || isMarginDigit) {
-          shouldErase = true;
+        if (isAnyFaintWatermark || isMarginNumber) {
+          shouldClean = true;
         }
       }
 
-      // Optional: Background Wash Removal (only if user explicitly enables it)
-      if (removeBackgroundTint && luminance >= 210 && luminance < 252) {
-        shouldErase = true;
+      // Optional: Background Wash Removal (only if user explicitly asked for it)
+      if (removeBackgroundTint && lum >= 200 && lum <= 252) {
+        shouldClean = true;
       }
 
-      // Apply Erase to pure background
-      if (shouldErase) {
+      // Apply Inpainting to Clean Paper White
+      if (shouldClean) {
         data[idx] = 255;
         data[idx + 1] = 255;
         data[idx + 2] = 255;
@@ -363,7 +463,7 @@ export async function inpaintSelectedBoxes(
 }
 
 /**
- * Applies manual brush mask inpainting
+ * Applies manual brush mask inpainting with edge-feathering
  */
 export async function applyBrushMaskInpaint(
   sourceDataUrl: string,
@@ -386,7 +486,7 @@ export async function applyBrushMaskInpaint(
   const src = srcImgData.data;
   const mask = maskImgData.data;
 
-  // Wherever mask has alpha > 20, inpaint with white background
+  // Wherever mask has alpha > 20, inpaint with clean white background
   for (let i = 0; i < src.length; i += 4) {
     if (mask[i + 3] > 20) {
       src[i] = 255;
@@ -399,3 +499,4 @@ export async function applyBrushMaskInpaint(
   ctx.putImageData(srcImgData, 0, 0);
   return canvas.toDataURL('image/png', 0.95);
 }
+

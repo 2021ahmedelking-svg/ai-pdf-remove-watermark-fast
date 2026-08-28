@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { LanguageStrings } from '../types';
-import { Eraser, Square, RotateCcw, Check, Paintbrush } from 'lucide-react';
+import { Eraser, Square, RotateCcw, Check, Paintbrush, X, Undo2 } from 'lucide-react';
 import { applyBrushMaskInpaint } from '../utils/imageProcessing';
 
 interface ManualEraserCanvasProps {
@@ -59,197 +59,229 @@ export const ManualEraserCanvas: React.FC<ManualEraserCanvasProps> = ({
     const rect = maskCanvasRef.current.getBoundingClientRect();
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+
     const scaleX = maskCanvasRef.current.width / rect.width;
     const scaleY = maskCanvasRef.current.height / rect.height;
+
     return {
       x: (clientX - rect.left) * scaleX,
       y: (clientY - rect.top) * scaleY,
     };
   };
 
-  const handleStart = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+  const saveHistoryState = () => {
+    const maskCtx = maskCanvasRef.current?.getContext('2d');
+    if (!maskCtx || !maskCanvasRef.current) return;
+    const current = maskCtx.getImageData(0, 0, maskCanvasRef.current.width, maskCanvasRef.current.height);
+    setHistory((prev) => [...prev.slice(-10), current]);
+  };
+
+  const handleStartDraw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    saveHistoryState();
     setIsDrawing(true);
     const coords = getCanvasCoords(e);
     setStartPos(coords);
 
-    const maskCtx = maskCanvasRef.current?.getContext('2d');
-    if (!maskCtx || !maskCanvasRef.current) return;
-
-    // Save history
-    setHistory(prev => [...prev.slice(-10), maskCtx.getImageData(0, 0, maskCanvasRef.current!.width, maskCanvasRef.current!.height)]);
-
     if (tool === 'brush') {
-      maskCtx.beginPath();
-      maskCtx.arc(coords.x, coords.y, brushSize / 2, 0, Math.PI * 2);
-      maskCtx.fillStyle = 'rgba(239, 68, 68, 0.6)';
-      maskCtx.fill();
+      drawBrushPoint(coords.x, coords.y);
     }
   };
 
-  const handleMove = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    if (!isDrawing) return;
-    const coords = getCanvasCoords(e);
+  const drawBrushPoint = (x: number, y: number) => {
     const maskCtx = maskCanvasRef.current?.getContext('2d');
     if (!maskCtx) return;
 
+    maskCtx.fillStyle = 'rgba(239, 68, 68, 0.65)'; // Red semi-transparent highlighter
+    maskCtx.beginPath();
+    maskCtx.arc(x, y, brushSize / 2, 0, Math.PI * 2);
+    maskCtx.fill();
+  };
+
+  const handleMoveDraw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (!isDrawing) return;
+    const coords = getCanvasCoords(e);
+
     if (tool === 'brush') {
-      maskCtx.beginPath();
-      maskCtx.arc(coords.x, coords.y, brushSize / 2, 0, Math.PI * 2);
-      maskCtx.fillStyle = 'rgba(239, 68, 68, 0.6)';
-      maskCtx.fill();
+      drawBrushPoint(coords.x, coords.y);
     }
   };
 
-  const handleEnd = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+  const handleEndDraw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     if (!isDrawing) return;
     setIsDrawing(false);
 
     if (tool === 'box' && startPos) {
-      const coords = getCanvasCoords(e);
+      const endCoords = getCanvasCoords(e);
       const maskCtx = maskCanvasRef.current?.getContext('2d');
-      if (!maskCtx) return;
-
-      const x = Math.min(startPos.x, coords.x);
-      const y = Math.min(startPos.y, coords.y);
-      const w = Math.abs(coords.x - startPos.x);
-      const h = Math.abs(coords.y - startPos.y);
-
-      maskCtx.fillStyle = 'rgba(239, 68, 68, 0.6)';
-      maskCtx.fillRect(x, y, w, h);
+      if (maskCtx) {
+        maskCtx.fillStyle = 'rgba(239, 68, 68, 0.65)';
+        const x = Math.min(startPos.x, endCoords.x);
+        const y = Math.min(startPos.y, endCoords.y);
+        const w = Math.abs(endCoords.x - startPos.x);
+        const h = Math.abs(endCoords.y - startPos.y);
+        maskCtx.fillRect(x, y, w, h);
+      }
     }
     setStartPos(null);
   };
 
   const handleUndo = () => {
-    if (history.length === 0 || !maskCanvasRef.current) return;
-    const maskCtx = maskCanvasRef.current.getContext('2d');
-    if (!maskCtx) return;
-    const last = history[history.length - 1];
-    maskCtx.putImageData(last, 0, 0);
-    setHistory(prev => prev.slice(0, -1));
+    if (history.length === 0) return;
+    const previous = history[history.length - 1];
+    const maskCtx = maskCanvasRef.current?.getContext('2d');
+    if (maskCtx && previous) {
+      maskCtx.putImageData(previous, 0, 0);
+      setHistory((prev) => prev.slice(0, -1));
+    }
   };
 
-  const handleClear = () => {
-    if (!maskCanvasRef.current) return;
-    const maskCtx = maskCanvasRef.current.getContext('2d');
-    if (!maskCtx) return;
-    maskCtx.clearRect(0, 0, maskCanvasRef.current.width, maskCanvasRef.current.height);
-    setHistory([]);
+  const handleClearAll = () => {
+    saveHistoryState();
+    const maskCtx = maskCanvasRef.current?.getContext('2d');
+    if (maskCtx && maskCanvasRef.current) {
+      maskCtx.clearRect(0, 0, maskCanvasRef.current.width, maskCanvasRef.current.height);
+    }
   };
 
   const handleApply = async () => {
     if (!maskCanvasRef.current) return;
-    const result = await applyBrushMaskInpaint(imageSrc, maskCanvasRef.current);
-    onApplyMask(result);
+    const newImage = await applyBrushMaskInpaint(imageSrc, maskCanvasRef.current);
+    onApplyMask(newImage);
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex flex-col p-4 md:p-8">
-      {/* Header Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-white px-6 py-4 rounded-3xl border border-slate-200 shadow-xl mb-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-2xl border border-indigo-100">
-            <Eraser className="w-5 h-5" />
+    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 max-w-4xl w-full max-h-[92vh] shadow-2xl flex flex-col gap-4 overflow-hidden transition-colors">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-2xl">
+              <Paintbrush className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-extrabold text-slate-900 dark:text-white">الممحاة اليدوية والتحديد المخصص</h3>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">حدد أي علامة أو نص بالفرشاة الحمراء لمسحه فوراً واستعادة الخلفية البيضاء</p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-base font-bold text-slate-900">{t.manualBrush}</h3>
-            <p className="text-xs text-slate-500">حدد المناطق المراد محوها يدوياً بالفرشاة أو المربع</p>
-          </div>
+
+          <button
+            onClick={onClose}
+            className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
-        {/* Toolbar Controls */}
-        <div className="flex items-center flex-wrap gap-2.5">
-          <div className="flex items-center bg-slate-50 p-1 rounded-2xl border border-slate-200 shadow-2xs">
+        {/* Toolbar */}
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/90 dark:border-slate-700">
+          <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={() => setTool('brush')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition ${
                 tool === 'brush'
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
               }`}
             >
-              <Paintbrush className="w-4 h-4" />
-              <span>فرشاة</span>
+              <Paintbrush className="w-3.5 h-3.5" />
+              <span>فرشاة حرة</span>
             </button>
+
             <button
+              type="button"
               onClick={() => setTool('box')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition ${
                 tool === 'box'
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
               }`}
             >
-              <Square className="w-4 h-4" />
-              <span>مربع تحديد</span>
+              <Square className="w-3.5 h-3.5" />
+              <span>تحديد مربع</span>
             </button>
           </div>
 
+          {/* Brush size */}
           {tool === 'brush' && (
-            <div className="flex items-center gap-2 px-3.5 py-2 bg-slate-50 rounded-2xl border border-slate-200 text-xs">
-              <span className="text-slate-600 font-semibold">{t.brushSize}:</span>
+            <div className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
+              <span>قطر الفرشاة:</span>
               <input
                 type="range"
                 min="10"
-                max="90"
+                max="80"
                 value={brushSize}
                 onChange={(e) => setBrushSize(Number(e.target.value))}
                 className="w-24 accent-indigo-600 cursor-pointer"
               />
-              <span className="font-mono font-bold text-indigo-600">{brushSize}px</span>
+              <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">{brushSize}px</span>
             </div>
           )}
 
-          <button
-            onClick={handleUndo}
-            disabled={history.length === 0}
-            className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-100 disabled:opacity-30 rounded-xl transition"
-            title="تراجع"
-          >
-            <RotateCcw className="w-4 h-4" />
-          </button>
+          {/* History / Clear */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleUndo}
+              disabled={history.length === 0}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl disabled:opacity-40 transition"
+              title="تراجع"
+            >
+              <Undo2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">تراجع</span>
+            </button>
 
-          <button
-            onClick={handleClear}
-            className="px-3.5 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-2xl border border-rose-200 transition"
-          >
-            {t.clearBrush}
-          </button>
+            <button
+              type="button"
+              onClick={handleClearAll}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-rose-600 dark:text-rose-400 bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-950 transition"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>مسح التحديد</span>
+            </button>
+          </div>
+        </div>
 
+        {/* Canvas Workspace */}
+        <div
+          ref={containerRef}
+          className="relative flex-1 bg-slate-100 dark:bg-slate-950 rounded-2xl overflow-auto flex items-center justify-center p-4 min-h-[350px]"
+        >
+          <div className="relative select-none shadow-2xl rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800">
+            <canvas ref={baseCanvasRef} className="block max-h-[60vh] max-w-full w-auto h-auto pointer-events-none" />
+            <canvas
+              ref={maskCanvasRef}
+              onMouseDown={handleStartDraw}
+              onMouseMove={handleMoveDraw}
+              onMouseUp={handleEndDraw}
+              onMouseLeave={handleEndDraw}
+              onTouchStart={handleStartDraw}
+              onTouchMove={handleMoveDraw}
+              onTouchEnd={handleEndDraw}
+              className="absolute inset-0 w-full h-full cursor-crosshair touch-none"
+            />
+          </div>
+        </div>
+
+        {/* Footer Actions */}
+        <div className="flex items-center justify-between border-t border-slate-100 dark:border-slate-800 pt-3">
           <button
+            type="button"
             onClick={onClose}
-            className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-2xl transition"
+            className="px-5 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-2xl text-xs transition"
           >
             إلغاء
           </button>
 
           <button
+            type="button"
             onClick={handleApply}
-            className="flex items-center gap-1.5 px-5 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-2xl shadow-lg shadow-indigo-200 transition"
+            className="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl text-xs shadow-lg shadow-indigo-500/20 transition"
           >
             <Check className="w-4 h-4" />
-            <span>{t.applyEraser}</span>
+            <span>تطبيق المسح واستبدال الخلفية</span>
           </button>
-        </div>
-      </div>
-
-      {/* Drawing Stage */}
-      <div
-        ref={containerRef}
-        className="relative flex-1 overflow-auto bg-slate-100 rounded-3xl border border-slate-200 flex items-center justify-center p-4"
-      >
-        <div className="relative shadow-2xl rounded-2xl overflow-hidden bg-white max-w-full max-h-full border border-slate-200">
-          <canvas ref={baseCanvasRef} className="block max-w-full max-h-[75vh] w-auto h-auto" />
-          <canvas
-            ref={maskCanvasRef}
-            onMouseDown={handleStart}
-            onMouseMove={handleMove}
-            onMouseUp={handleEnd}
-            onTouchStart={handleStart}
-            onTouchMove={handleMove}
-            onTouchEnd={handleEnd}
-            className="absolute inset-0 w-full h-full cursor-crosshair touch-none"
-          />
         </div>
       </div>
     </div>

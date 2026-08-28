@@ -1,6 +1,6 @@
 import React from 'react';
 import { PDFPageData, LanguageStrings } from '../types';
-import { CheckCircle2, ChevronRight, ChevronLeft } from 'lucide-react';
+import { CheckCircle2, ChevronRight, ChevronLeft, Layers } from 'lucide-react';
 
 interface PageThumbnailStripProps {
   pages: PDFPageData[];
@@ -18,10 +18,13 @@ export const PageThumbnailStrip: React.FC<PageThumbnailStripProps> = ({
   if (pages.length <= 1) return null;
 
   return (
-    <div className="flex flex-col gap-2 bg-white rounded-3xl border border-slate-200/90 p-4 shadow-sm">
-      <div className="flex items-center justify-between text-xs font-bold text-slate-800 px-1">
-        <span>صفحات المستند ({pages.length} صفحات)</span>
-        <span className="text-[11px] text-indigo-600 font-mono font-bold">
+    <div className="flex flex-col gap-2 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 p-4 shadow-sm transition-colors">
+      <div className="flex items-center justify-between text-xs font-bold text-slate-800 dark:text-slate-200 px-1">
+        <span className="flex items-center gap-1.5">
+          <Layers className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+          <span>صفحات المستند ({pages.length} صفحات)</span>
+        </span>
+        <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-mono font-bold bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-full border border-indigo-100 dark:border-indigo-900">
           {t.page} {currentPageIndex + 1} {t.of} {pages.length}
         </span>
       </div>
@@ -37,11 +40,11 @@ export const PageThumbnailStrip: React.FC<PageThumbnailStripProps> = ({
               onClick={() => onSelectPage(idx)}
               className={`relative flex flex-col items-center shrink-0 rounded-2xl overflow-hidden border-2 transition-all p-1.5 group ${
                 isCurrent
-                  ? 'border-indigo-600 bg-indigo-50/60 shadow-md shadow-indigo-100 scale-105'
-                  : 'border-slate-200 bg-slate-50 hover:border-indigo-300'
+                  ? 'border-indigo-600 bg-indigo-50/60 dark:bg-indigo-950/40 shadow-md shadow-indigo-500/15 scale-105'
+                  : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-indigo-300 dark:hover:border-indigo-600'
               }`}
             >
-              <div className="relative w-16 h-22 bg-white rounded-xl overflow-hidden shadow-xs flex items-center justify-center border border-slate-100">
+              <div className="relative w-16 h-22 bg-white dark:bg-slate-800 rounded-xl overflow-hidden shadow-2xs flex items-center justify-center border border-slate-100 dark:border-slate-700">
                 <img
                   src={page.cleanedCanvasDataUrl || page.originalCanvasDataUrl}
                   alt={`Page ${page.pageNumber}`}
@@ -57,10 +60,10 @@ export const PageThumbnailStrip: React.FC<PageThumbnailStripProps> = ({
 
               <span
                 className={`text-[10px] font-bold mt-1.5 ${
-                  isCurrent ? 'text-indigo-600 font-extrabold' : 'text-slate-600'
+                  isCurrent ? 'text-indigo-600 dark:text-indigo-400 font-extrabold' : 'text-slate-600 dark:text-slate-400'
                 }`}
               >
-                {page.pageNumber}
+                {t.page} {page.pageNumber}
               </span>
             </button>
           );

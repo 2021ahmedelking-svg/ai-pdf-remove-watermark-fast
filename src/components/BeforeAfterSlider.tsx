@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { BoundingBox, LanguageStrings } from '../types';
-import { ZoomIn, ZoomOut, Maximize2, SplitSquareVertical, Columns, Eye, Layers } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize2, SplitSquareVertical, Columns, Eye, Layers, Sparkles } from 'lucide-react';
 
 interface BeforeAfterSliderProps {
   originalImage: string;
@@ -65,77 +65,89 @@ export const BeforeAfterSlider: React.FC<BeforeAfterSliderProps> = ({
   }, [isDragging, updateSlider]);
 
   return (
-    <div className="flex flex-col h-full w-full bg-white rounded-3xl border border-slate-200/90 shadow-xl overflow-hidden">
+    <div className="flex flex-col bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-xl overflow-hidden flex-1 transition-colors">
       {/* Top Toolbar */}
-      <div className="flex flex-wrap items-center justify-between px-4 py-3 bg-slate-50/90 border-b border-slate-200/80 gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 backdrop-blur-xs">
         {/* View Mode Switcher */}
-        <div className="flex items-center gap-1 bg-white p-1 rounded-2xl border border-slate-200 shadow-xs">
+        <div className="flex items-center gap-1 bg-white dark:bg-slate-800 p-1 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-2xs">
           <button
-            id="view-mode-split"
+            type="button"
             onClick={() => setViewMode('split')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
               viewMode === 'split'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
             }`}
-            title={t.splitView}
           >
             <SplitSquareVertical className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">{t.splitView}</span>
           </button>
+
           <button
-            id="view-mode-side"
+            type="button"
             onClick={() => setViewMode('side')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
               viewMode === 'side'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
             }`}
-            title={t.sideBySide}
           >
             <Columns className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">{t.sideBySide}</span>
           </button>
+
           <button
-            id="view-mode-after"
+            type="button"
             onClick={() => setViewMode('after')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
               viewMode === 'after'
-                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-200'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
             }`}
-            title={t.afterOnly}
           >
             <Eye className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">{t.afterOnly}</span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => setViewMode('before')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              viewMode === 'before'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">{t.beforeOnly}</span>
+          </button>
         </div>
 
         {/* Zoom Controls */}
-        <div className="flex items-center gap-1 bg-white p-1 rounded-2xl border border-slate-200 shadow-xs">
+        <div className="flex items-center gap-1 bg-white dark:bg-slate-800 p-1 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-2xs">
           <button
-            id="zoom-out-btn"
-            onClick={() => setZoom((prev) => Math.max(40, prev - 15))}
-            className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+            type="button"
+            onClick={() => setZoom((z) => Math.max(50, z - 25))}
+            className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition"
             title={t.zoomOut}
           >
-            <ZoomOut className="w-4 h-4" />
+            <ZoomOut className="w-3.5 h-3.5" />
           </button>
-          <span className="text-xs font-mono font-bold text-slate-700 px-2 min-w-[3.5rem] text-center">
+          <span className="text-xs font-mono font-bold text-slate-700 dark:text-slate-200 px-2 min-w-[42px] text-center">
             {zoom}%
           </span>
           <button
-            id="zoom-in-btn"
-            onClick={() => setZoom((prev) => Math.min(250, prev + 15))}
-            className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+            type="button"
+            onClick={() => setZoom((z) => Math.min(200, z + 25))}
+            className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition"
             title={t.zoomIn}
           >
-            <ZoomIn className="w-4 h-4" />
+            <ZoomIn className="w-3.5 h-3.5" />
           </button>
           <button
-            id="zoom-reset-btn"
+            type="button"
             onClick={() => setZoom(100)}
-            className="p-1.5 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+            className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition"
             title={t.fitPage}
           >
             <Maximize2 className="w-3.5 h-3.5" />
@@ -143,124 +155,126 @@ export const BeforeAfterSlider: React.FC<BeforeAfterSliderProps> = ({
         </div>
       </div>
 
-      {/* Main Interactive Stage */}
-      <div className="relative flex-1 overflow-auto p-6 flex items-center justify-center min-h-[480px] bg-slate-100/60">
+      {/* Main Canvas & Comparison Area */}
+      <div className="relative flex-1 flex items-center justify-center p-4 sm:p-6 bg-slate-100/70 dark:bg-slate-950/60 overflow-auto min-h-[440px]">
+        {/* Processing overlay */}
         {isProcessing && (
-          <div className="absolute inset-0 z-30 bg-white/80 backdrop-blur-xs flex flex-col items-center justify-center gap-3">
-            <div className="relative w-14 h-14">
-              <div className="absolute inset-0 rounded-full border-4 border-indigo-100"></div>
-              <div className="absolute inset-0 rounded-full border-4 border-indigo-600 border-t-transparent animate-spin"></div>
+          <div className="absolute inset-0 z-30 bg-white/70 dark:bg-slate-900/80 backdrop-blur-xs flex flex-col items-center justify-center gap-3">
+            <div className="relative">
+              <div className="w-12 h-12 rounded-full border-4 border-indigo-200 dark:border-indigo-900 border-t-indigo-600 animate-spin"></div>
+              <Sparkles className="w-5 h-5 text-indigo-600 absolute inset-0 m-auto animate-pulse" />
             </div>
-            <p className="text-sm font-bold text-indigo-700 animate-pulse">{t.processing}</p>
+            <p className="text-xs font-bold text-slate-800 dark:text-slate-200">{t.processing}</p>
           </div>
         )}
 
-        <div
-          style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'center center' }}
-          className="transition-transform duration-100 ease-out max-w-full flex items-center justify-center"
-        >
-          {viewMode === 'split' ? (
-            /* Split Screen Comparison */
+        {/* View Mode: SPLIT SLIDER */}
+        {viewMode === 'split' && (
+          <div
+            ref={containerRef}
+            style={{ width: `${zoom}%`, maxWidth: zoom === 100 ? '700px' : 'none' }}
+            className="relative select-none rounded-2xl overflow-hidden shadow-2xl bg-white border border-slate-200/90 dark:border-slate-700"
+          >
+            {/* Cleaned Image (Bottom Layer) */}
+            <img
+              src={effectiveCleanedImage}
+              alt="Cleaned Document"
+              className="w-full h-auto block pointer-events-none"
+            />
+
+            {/* Original Image (Top Clipped Layer) */}
             <div
-              ref={containerRef}
-              id="before-after-container"
-              onPointerDown={handlePointerDown}
-              className="relative select-none shadow-2xl rounded-2xl overflow-hidden cursor-ew-resize bg-white border border-slate-200"
-              style={{ maxWidth: '820px' }}
+              style={{ clipPath: `inset(0 ${100 - sliderPosition}% 0 0)` }}
+              className="absolute inset-0 overflow-hidden"
             >
-              {/* Clean Result (Underneath Base) */}
               <img
-                src={effectiveCleanedImage}
-                alt="Clean Result"
+                src={originalImage}
+                alt="Original Document"
                 className="w-full h-auto block pointer-events-none"
               />
 
-              {/* Original Watermarked Layer (Clipped by slider position) */}
-              <div
-                className="absolute inset-0 overflow-hidden pointer-events-none"
-                style={{ clipPath: `polygon(0 0, ${sliderPosition}% 0, ${sliderPosition}% 100%, 0 100%)` }}
-              >
-                <img
-                  src={originalImage}
-                  alt="Original Watermarked"
-                  className="w-full h-auto block pointer-events-none"
-                />
-
-                {/* Bounding Boxes on Original if enabled */}
-                {showBoundingBoxes && detectedWatermarks.map((box) => (
+              {/* Bounding Boxes on Original Layer */}
+              {showBoundingBoxes &&
+                detectedWatermarks.map((box) => (
                   <div
                     key={box.id}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onSelectBox?.(box.id);
-                    }}
+                    onClick={() => onSelectBox?.(box.id)}
                     style={{
                       top: `${box.ymin / 10}%`,
                       left: `${box.xmin / 10}%`,
-                      width: `${(box.xmax - box.xmin) / 10}%`,
                       height: `${(box.ymax - box.ymin) / 10}%`,
+                      width: `${(box.xmax - box.xmin) / 10}%`,
                     }}
-                    className="absolute border-2 border-rose-500 bg-rose-500/15 rounded-lg pointer-events-auto flex items-start p-1 animate-pulse"
-                  >
-                    <span className="bg-rose-600 text-white text-[9px] px-1.5 py-0.5 rounded-full font-mono font-bold leading-none shadow">
-                      {box.label || 'Watermark'}
-                    </span>
-                  </div>
+                    className={`absolute cursor-pointer border-2 transition-all rounded-lg ${
+                      box.selected !== false
+                        ? 'border-indigo-500 bg-indigo-500/15 ring-2 ring-indigo-400/40'
+                        : 'border-slate-400/60 bg-slate-400/10'
+                    }`}
+                  />
                 ))}
-              </div>
+            </div>
 
-              {/* Vertical Drag Line Handle */}
-              <div
-                className="absolute top-0 bottom-0 z-20 pointer-events-none"
-                style={{ left: `${sliderPosition}%` }}
-              >
-                <div className="absolute top-0 bottom-0 -left-[1.5px] w-[3px] bg-gradient-to-b from-indigo-500 via-indigo-600 to-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.6)]" />
-                <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-9 h-9 bg-slate-900 border-2 border-white rounded-full flex items-center justify-center shadow-xl shadow-slate-900/30 text-white">
-                  <div className="flex items-center gap-0.5 text-[11px] font-bold">
-                    <span>‹</span>
-                    <span>›</span>
-                  </div>
-                </div>
+            {/* Draggable Divider Line */}
+            <div
+              style={{ left: `${sliderPosition}%` }}
+              onPointerDown={handlePointerDown}
+              className="absolute top-0 bottom-0 w-1 bg-white cursor-ew-resize shadow-[0_0_10px_rgba(0,0,0,0.4)] z-20 flex items-center justify-center -translate-x-1/2"
+            >
+              <div className="w-8 h-8 rounded-full bg-indigo-600 text-white shadow-lg border-2 border-white flex items-center justify-center text-[10px] font-bold">
+                ⬌
               </div>
+            </div>
 
-              {/* Floating Badges */}
-              <div className="absolute top-3 left-3 z-10 px-3 py-1 bg-white/90 backdrop-blur-md rounded-full text-xs font-bold text-rose-700 border border-rose-200 shadow-sm">
+            {/* Floating Labels */}
+            <div className="absolute top-3 right-3 bg-slate-900/80 backdrop-blur-md text-white text-[10px] font-bold px-2.5 py-1 rounded-full pointer-events-none z-10">
+              {t.after}
+            </div>
+            <div className="absolute top-3 left-3 bg-slate-900/80 backdrop-blur-md text-white text-[10px] font-bold px-2.5 py-1 rounded-full pointer-events-none z-10">
+              {t.before}
+            </div>
+          </div>
+        )}
+
+        {/* View Mode: SIDE BY SIDE */}
+        {viewMode === 'side' && (
+          <div
+            style={{ width: `${zoom}%` }}
+            className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-5xl w-full"
+          >
+            <div className="relative rounded-2xl overflow-hidden shadow-xl bg-white border border-slate-200">
+              <div className="absolute top-2 left-2 bg-slate-900/80 text-white text-[10px] font-bold px-2 py-0.5 rounded-full z-10">
                 {t.before}
               </div>
-              <div className="absolute top-3 right-3 z-10 px-3 py-1 bg-white/90 backdrop-blur-md rounded-full text-xs font-bold text-emerald-700 border border-emerald-200 shadow-sm">
+              <img src={originalImage} alt="Before" className="w-full h-auto block" />
+            </div>
+            <div className="relative rounded-2xl overflow-hidden shadow-xl bg-white border border-slate-200">
+              <div className="absolute top-2 left-2 bg-emerald-700/80 text-white text-[10px] font-bold px-2 py-0.5 rounded-full z-10">
                 {t.after}
               </div>
+              <img src={effectiveCleanedImage} alt="After" className="w-full h-auto block" />
             </div>
-          ) : viewMode === 'side' ? (
-            /* Side by Side Mode */
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-5xl">
-              <div className="relative rounded-2xl overflow-hidden bg-white shadow-xl border border-slate-200">
-                <div className="absolute top-3 left-3 z-10 px-3 py-1 bg-rose-600 text-white rounded-full text-xs font-bold shadow-md">
-                  {t.before}
-                </div>
-                <img src={originalImage} alt="Original" className="w-full h-auto block" />
-              </div>
-              <div className="relative rounded-2xl overflow-hidden bg-white shadow-xl border border-slate-200">
-                <div className="absolute top-3 left-3 z-10 px-3 py-1 bg-emerald-600 text-white rounded-full text-xs font-bold shadow-md">
-                  {t.after}
-                </div>
-                <img src={effectiveCleanedImage} alt="Cleaned" className="w-full h-auto block" />
-              </div>
-            </div>
-          ) : (
-            /* Single View (After Only or Before Only) */
-            <div className="relative rounded-2xl overflow-hidden bg-white shadow-2xl border border-slate-200 max-w-2xl">
-              <div className="absolute top-3 left-3 z-10 px-3 py-1 bg-slate-900 text-white rounded-full text-xs font-bold shadow-md">
-                {viewMode === 'after' ? t.after : t.before}
-              </div>
-              <img
-                src={viewMode === 'after' ? effectiveCleanedImage : originalImage}
-                alt="Document View"
-                className="w-full h-auto block"
-              />
-            </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {/* View Mode: AFTER ONLY */}
+        {viewMode === 'after' && (
+          <div
+            style={{ width: `${zoom}%`, maxWidth: zoom === 100 ? '700px' : 'none' }}
+            className="rounded-2xl overflow-hidden shadow-2xl bg-white border border-slate-200"
+          >
+            <img src={effectiveCleanedImage} alt="Cleaned" className="w-full h-auto block" />
+          </div>
+        )}
+
+        {/* View Mode: BEFORE ONLY */}
+        {viewMode === 'before' && (
+          <div
+            style={{ width: `${zoom}%`, maxWidth: zoom === 100 ? '700px' : 'none' }}
+            className="rounded-2xl overflow-hidden shadow-2xl bg-white border border-slate-200"
+          >
+            <img src={originalImage} alt="Original" className="w-full h-auto block" />
+          </div>
+        )}
       </div>
     </div>
   );

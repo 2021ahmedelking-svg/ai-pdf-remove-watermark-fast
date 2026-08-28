@@ -116,9 +116,263 @@ export async function loadAndRenderPdf(
 }
 
 /**
+ * Loads an image file directly into PDFPageData format
+ */
+export async function loadAndRenderImageFile(
+  file: File | Blob
+): Promise<{ pages: PDFPageData[]; rawPdfBase64: string; totalPages: number }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const img = new Image();
+      img.onload = () => {
+        const pages: PDFPageData[] = [
+          {
+            pageNumber: 1,
+            originalCanvasDataUrl: dataUrl,
+            cleanedCanvasDataUrl: null,
+            width: img.width || 1200,
+            height: img.height || 1600,
+            aspectRatio: (img.width || 1200) / (img.height || 1600),
+            detectedWatermarks: [],
+            isProcessing: false,
+          },
+        ];
+        resolve({
+          pages,
+          rawPdfBase64: dataUrl,
+          totalPages: 1,
+        });
+      };
+      img.onerror = (e) => reject(e);
+      img.src = dataUrl;
+    };
+    reader.onerror = (e) => reject(e);
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
  * Generates ready-to-test realistic watermarked sample PDFs on the fly using pdf-lib
  */
-export async function createSamplePdf(type: 'contract' | 'academic' | 'invoice'): Promise<{ file: File; name: string }> {
+export async function createSamplePdf(type: 'contract' | 'academic' | 'invoice' | 'arabic_exam'): Promise<{ file: File; name: string }> {
+  if (type === 'arabic_exam') {
+    // Generate an Egyptian/Arab biology exam sample with vertebra diagram, graph, red numbers (١), (٢), and faint watermark 0114...
+    const canvas = document.createElement('canvas');
+    canvas.width = 1200;
+    canvas.height = 1600;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (ctx) {
+      // White paper
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, 1200, 1600);
+
+      // Question 13 Container / Header
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 24px sans-serif';
+      ctx.direction = 'rtl';
+      ctx.fillText('١٣  الشكل المقابل يوضح المنظر العلوي لإحدى فقرات العمود الفقري ، ادرسه جيدًا ثم أجب :', 1140, 70);
+
+      // Red Question 1
+      ctx.fillStyle = '#b91c1c';
+      ctx.font = 'bold 22px sans-serif';
+      ctx.fillText('(١)  في أي منطقة توجد الفقرة المقابلة في جسم الإنسان ؟', 1140, 120);
+
+      // Dotted underline
+      ctx.fillStyle = '#334155';
+      ctx.font = '20px monospace';
+      ctx.fillText('.......................................................................................................', 1140, 160);
+
+      // Red Question 2
+      ctx.fillStyle = '#b91c1c';
+      ctx.font = 'bold 22px sans-serif';
+      ctx.fillText('(٢)  أي مكونات الجهاز العصبي المركزي يمر في التركيب (X) ؟', 1140, 210);
+      ctx.fillStyle = '#334155';
+      ctx.fillText('.......................................................................................................', 1140, 250);
+
+      // Red Question 3
+      ctx.fillStyle = '#b91c1c';
+      ctx.font = 'bold 22px sans-serif';
+      ctx.fillText('(٣)  أي أجزاء الجمجمة يتمفصل مع التركيب (Y) ؟', 1140, 300);
+      ctx.fillStyle = '#334155';
+      ctx.fillText('.......................................................................................................', 1140, 340);
+
+      // Vertebra Diagram illustration (Yellow bone body, purple facets, black pointer arrows)
+      ctx.save();
+      // Bone Body (yellow/tan)
+      ctx.fillStyle = '#eab308';
+      ctx.beginPath();
+      ctx.ellipse(300, 220, 90, 60, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#a16207';
+      ctx.stroke();
+
+      // Neural arch hole
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(300, 210, 35, 25, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Articular facets (purple)
+      ctx.fillStyle = '#9333ea';
+      ctx.beginPath();
+      ctx.arc(240, 175, 18, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(360, 175, 18, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Pointer Arrow X (to canal)
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(180, 210);
+      ctx.lineTo(270, 210);
+      ctx.stroke();
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 22px sans-serif';
+      ctx.direction = 'ltr';
+      ctx.fillText('X', 155, 218);
+
+      // Pointer Arrow Y (to facet)
+      ctx.beginPath();
+      ctx.moveTo(420, 150);
+      ctx.lineTo(375, 170);
+      ctx.stroke();
+      ctx.fillText('Y', 430, 150);
+      ctx.restore();
+
+      // Divider Line
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(60, 410);
+      ctx.lineTo(1140, 410);
+      ctx.stroke();
+
+      // Question 14 Header
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 24px sans-serif';
+      ctx.direction = 'rtl';
+      ctx.fillText('١٤  الرسم البياني المقابل يوضح التغير في حجم فقرات العمود الفقرى المتمفصلة فى شخص بالغ ، ادرسه جيدًا ثم أجب:', 1140, 460);
+
+      // Red Question 14 (1)
+      ctx.fillStyle = '#b91c1c';
+      ctx.font = 'bold 22px sans-serif';
+      ctx.fillText('(١)  أي النقاط الموضحة على الرسم تمثل مجموعة الفقرات الأكثر عرضة لحدوث انزلاق غضروفي ؟', 1140, 510);
+      ctx.fillStyle = '#334155';
+      ctx.fillText('.......................................................................................................', 1140, 550);
+
+      // Red Question 14 (2)
+      ctx.fillStyle = '#b91c1c';
+      ctx.font = 'bold 22px sans-serif';
+      ctx.fillText('(٢)  أي النقاط الموضحة على الرسم تمثل مجموعة الفقرات التي تساعد في حماية القلب والرئتين ؟', 1140, 600);
+      ctx.fillStyle = '#334155';
+      ctx.fillText('.......................................................................................................', 1140, 640);
+
+      // Graph with Cyan Gridlines & Points (ل), (م), (ن)
+      ctx.save();
+      const gx = 180;
+      const gy = 860;
+      const gw = 360;
+      const gh = 200;
+
+      // Cyan Gridlines
+      ctx.strokeStyle = '#bae6fd';
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 5; i++) {
+        const yLine = gy - (gh / 5) * i;
+        ctx.beginPath();
+        ctx.moveTo(gx, yLine);
+        ctx.lineTo(gx + gw, yLine);
+        ctx.stroke();
+      }
+      for (let j = 0; j <= 6; j++) {
+        const xLine = gx + (gw / 6) * j;
+        ctx.beginPath();
+        ctx.moveTo(xLine, gy);
+        ctx.lineTo(xLine, gy - gh);
+        ctx.stroke();
+      }
+
+      // Graph Axes (Blue)
+      ctx.strokeStyle = '#0284c7';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(gx, gy - gh);
+      ctx.lineTo(gx, gy);
+      ctx.lineTo(gx + gw, gy);
+      ctx.stroke();
+
+      // Axis Labels
+      ctx.fillStyle = '#0369a1';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.direction = 'rtl';
+      ctx.fillText('حجم الفقرات', gx + 60, gy - gh - 12);
+      ctx.fillText('رقم الفقرات', gx + gw, gy + 30);
+
+      // Curve
+      ctx.strokeStyle = '#e11d48';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(gx + 30, gy - 40);
+      ctx.lineTo(gx + 120, gy - 90);
+      ctx.lineTo(gx + 220, gy - 160);
+      ctx.lineTo(gx + 320, gy - 30);
+      ctx.stroke();
+
+      // Points (ل), (م), (ن)
+      ctx.fillStyle = '#1e293b';
+      ctx.font = 'bold 18px sans-serif';
+      ctx.beginPath();
+      ctx.arc(gx + 120, gy - 90, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillText('(ل)', gx + 120, gy - 105);
+
+      ctx.beginPath();
+      ctx.arc(gx + 220, gy - 160, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillText('(م)', gx + 220, gy - 175);
+
+      ctx.beginPath();
+      ctx.arc(gx + 320, gy - 30, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillText('(ن)', gx + 320, gy - 45);
+      ctx.restore();
+
+      // ========================================================
+      // FAINT WATERMARKS (The exact teacher phone number & name)
+      // ========================================================
+      ctx.save();
+      // 1. Right Margin Phone Number Watermark (01143387848)
+      ctx.fillStyle = 'rgba(180, 185, 195, 0.45)';
+      ctx.font = 'bold 22px sans-serif';
+      ctx.direction = 'ltr';
+      ctx.fillText('01143387848 / 01099234851', 30, 750);
+      ctx.fillText('01143387848 / 01099234851', 30, 1200);
+
+      // 2. Large Diagonal Faint Background Watermark
+      ctx.translate(600, 800);
+      ctx.rotate((-35 * Math.PI) / 180);
+      ctx.fillStyle = 'rgba(200, 205, 215, 0.35)';
+      ctx.font = 'bold 54px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('أ / محمد الشناوي - 01143387848', 0, -100);
+      ctx.fillText('مذكرات الأحياء للثانوية العامة 2026', 0, 60);
+      ctx.fillText('أ / محمد الشناوي - 01143387848', 0, 220);
+      ctx.restore();
+
+      const blob = await new Promise<Blob>((res) => canvas.toBlob((b) => res(b!), 'image/png'));
+      return {
+        file: new File([blob], 'egyptian-biology-exam-watermarked.png', { type: 'image/png' }),
+        name: 'egyptian-biology-exam-watermarked.png',
+      };
+    }
+  }
+
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);

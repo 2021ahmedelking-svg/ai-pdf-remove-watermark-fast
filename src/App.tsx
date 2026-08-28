@@ -7,7 +7,7 @@ import {
   PDFPageData,
 } from './types';
 import { arTranslations, enTranslations } from './utils/translations';
-import { loadAndRenderPdf, fileToArrayBuffer, createSamplePdf } from './utils/pdfEngine';
+import { loadAndRenderPdf, loadAndRenderImageFile, fileToArrayBuffer, createSamplePdf } from './utils/pdfEngine';
 import { cleanImageWithColorThreshold, inpaintSelectedBoxes } from './utils/imageProcessing';
 import { Header } from './components/Header';
 import { BeforeAfterSlider } from './components/BeforeAfterSlider';
@@ -28,11 +28,30 @@ import {
   CheckCircle2,
   FileText,
   AlertCircle,
+  Zap,
+  Lock,
+  Eye,
+  Sliders,
 } from 'lucide-react';
 
 export default function App() {
   const [lang, setLang] = useState<'ar' | 'en'>('ar');
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+    return localStorage.getItem('pdfclear_theme') === 'dark';
+  });
+
   const t: LanguageStrings = lang === 'ar' ? arTranslations : enTranslations;
+
+  // Toggle Dark mode class on <html>
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('pdfclear_theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('pdfclear_theme', 'light');
+    }
+  }, [isDarkMode]);
 
   // Document state
   const [docState, setDocState] = useState<PDFDocumentState>({
@@ -69,6 +88,7 @@ export default function App() {
     brushSize: 32,
   });
 
+  // UI Modals & Overlays
   const [showBoundingBoxes, setShowBoundingBoxes] = useState<boolean>(true);
   const [showManualBrush, setShowManualBrush] = useState<boolean>(false);
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
@@ -79,7 +99,7 @@ export default function App() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Auto hide toasts
+  // Auto-dismiss toast
   useEffect(() => {
     if (successToast) {
       const timer = setTimeout(() => setSuccessToast(null), 4000);
@@ -87,45 +107,39 @@ export default function App() {
     }
   }, [successToast]);
 
-  const handleUpdateConfig = async (newCfg: Partial<RemovalConfig>) => {
-    const updatedConfig = { ...config, ...newCfg };
-    setConfig(updatedConfig);
-
-    const curIdx = docState.currentPageIndex;
-    const curPage = docState.pages[curIdx];
-    if (curPage && curPage.originalCanvasDataUrl) {
-      try {
-        const cleaned = await cleanImageWithColorThreshold(
-          curPage.originalCanvasDataUrl,
-          updatedConfig,
-          curPage.detectedWatermarks
-        );
-        setDocState((prev) => {
-          const copy = [...prev.pages];
-          if (copy[curIdx]) {
-            copy[curIdx].cleanedCanvasDataUrl = cleaned;
-          }
-          return { ...prev, pages: copy };
-        });
-      } catch (e) {
-        console.error('Error re-cleaning with new config:', e);
-      }
-    }
-  };
-
-  // Process and load PDF File
+  // Load PDF or Image file into workspace
   const handleLoadPdfFile = async (file: File) => {
     try {
       setErrorMessage(null);
       setDocState((prev) => ({
         ...prev,
         isAnalyzing: true,
+        file,
         fileName: file.name,
         fileSize: file.size,
       }));
 
-      const arrayBuffer = await fileToArrayBuffer(file);
-      const { pages, rawPdfBase64, totalPages } = await loadAndRenderPdf(arrayBuffer, 2.0);
+      const isImage = file.type.startsWith('image/') || /\.(png|jpe?g|webp|bmp)$/i.test(file.name);
+      let renderedPages: PDFPageData[] = [];
+      let rawPdfBase64: string | null = null;
+      let totalPages = 1;
+
+      if (isImage) {
+        const res = await loadAndRenderImageFile(file);
+        renderedPages = res.pages;
+        rawPdfBase64 = res.rawPdfBase64;
+        totalPages = res.totalPages;
+      } else {
+        const arrayBuffer = await fileToArrayBuffer(file);
+        const res = await loadAndRenderPdf(arrayBuffer);
+        renderedPages = res.pages;
+        rawPdfBase64 = res.rawPdfBase64;
+        totalPages = res.totalPages;
+      }
+
+      if (renderedPages.length === 0) {
+        throw new Error('لم يتم العثور على صفحات قابلة للعرض في هذا الملف.');
+      }
 
       setDocState({
         file,
@@ -133,22 +147,20 @@ export default function App() {
         fileSize: file.size,
         totalPages,
         currentPageIndex: 0,
-        pages,
+        pages: renderedPages,
         rawPdfBase64,
         isAnalyzing: false,
         isBatchProcessing: false,
         batchProgress: 0,
       });
 
-      // Automatically trigger initial detection on first page
-      if (pages.length > 0) {
-        setTimeout(() => {
-          runWatermarkDetection(0, pages[0].originalCanvasDataUrl);
-        }, 200);
+      // Run AI watermark detection & auto-clean on the first page
+      if (renderedPages[0]) {
+        runWatermarkDetection(0, renderedPages[0].originalCanvasDataUrl);
       }
     } catch (err: any) {
-      console.error('Error loading PDF:', err);
-      setErrorMessage(err.message || 'فشل تحميل ملف الـ PDF. يرجى التأكد من صحة الملف.');
+      console.error('Error loading PDF/Image:', err);
+      setErrorMessage(err.message || 'فشل تحميل الملف. يرجى التأكد من صحة الملف أو الصورة.');
       setDocState((prev) => ({ ...prev, isAnalyzing: false }));
     }
   };
@@ -159,16 +171,21 @@ export default function App() {
     setIsDraggingFile(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const file = e.dataTransfer.files[0];
-      if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+      const isPdfOrImage =
+        file.type === 'application/pdf' ||
+        file.type.startsWith('image/') ||
+        /\.(pdf|png|jpe?g|webp|bmp)$/i.test(file.name);
+
+      if (isPdfOrImage) {
         handleLoadPdfFile(file);
       } else {
-        setErrorMessage('يرجى اختيار ملف بصيغة PDF فقط.');
+        setErrorMessage('يرجى اختيار ملف بصيغة PDF أو صورة (PNG/JPG).');
       }
     }
   };
 
   // Select Sample PDF
-  const handleSelectSample = async (type: 'contract' | 'academic' | 'invoice') => {
+  const handleSelectSample = async (type: 'contract' | 'academic' | 'invoice' | 'arabic_exam') => {
     try {
       setDocState((prev) => ({ ...prev, isAnalyzing: true }));
       const sample = await createSamplePdf(type);
@@ -252,7 +269,7 @@ export default function App() {
         }
         return { ...prev, pages: copy };
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Detection error:', err);
       setDocState((prev) => {
         const copy = [...prev.pages];
@@ -262,7 +279,33 @@ export default function App() {
     }
   };
 
-  // Apply removal to current active page
+  // Update removal configuration and live re-apply on current page
+  const handleUpdateConfig = useCallback(
+    async (newConfig: Partial<RemovalConfig>) => {
+      const updated = { ...config, ...newConfig };
+      setConfig(updated);
+
+      const curIdx = docState.currentPageIndex;
+      const curPage = docState.pages[curIdx];
+      if (curPage) {
+        const cleaned = await cleanImageWithColorThreshold(
+          curPage.originalCanvasDataUrl,
+          updated,
+          curPage.detectedWatermarks
+        );
+        setDocState((prev) => {
+          const copy = [...prev.pages];
+          if (copy[curIdx]) {
+            copy[curIdx].cleanedCanvasDataUrl = cleaned;
+          }
+          return { ...prev, pages: copy };
+        });
+      }
+    },
+    [config, docState.currentPageIndex, docState.pages]
+  );
+
+  // Apply removal on current active page
   const handleApplyCurrentPage = async () => {
     const curIdx = docState.currentPageIndex;
     const curPage = docState.pages[curIdx];
@@ -270,112 +313,72 @@ export default function App() {
 
     setDocState((prev) => {
       const copy = [...prev.pages];
-      copy[curIdx].isProcessing = true;
+      if (copy[curIdx]) copy[curIdx].isProcessing = true;
       return { ...prev, pages: copy };
     });
 
-    try {
-      let cleanedUrl: string;
+    const cleaned = await cleanImageWithColorThreshold(
+      curPage.originalCanvasDataUrl,
+      config,
+      curPage.detectedWatermarks
+    );
 
-      if (config.engine === 'vector_clean' && docState.rawPdfBase64) {
-        // Try server vector purge
-        try {
-          const res = await fetch('/api/pdf/clean-vector-pdf', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              pdfBase64: docState.rawPdfBase64,
-              removeAnnotations: config.removeAnnotations,
-              removeArtifacts: config.removeArtifacts,
-            }),
-          });
-          const data = await res.json();
-          if (data.cleanedPdfBase64) {
-            // Re-render
-            const uint8 = (await import('./utils/pdfEngine')).base64ToUint8Array(data.cleanedPdfBase64);
-            const reRendered = await loadAndRenderPdf(uint8.buffer, 2.0);
-            if (reRendered.pages[curIdx]) {
-              cleanedUrl = reRendered.pages[curIdx].originalCanvasDataUrl;
-            } else {
-              cleanedUrl = await cleanImageWithColorThreshold(curPage.originalCanvasDataUrl, config, curPage.detectedWatermarks);
-            }
-          } else {
-            cleanedUrl = await cleanImageWithColorThreshold(curPage.originalCanvasDataUrl, config, curPage.detectedWatermarks);
-          }
-        } catch (e) {
-          cleanedUrl = await cleanImageWithColorThreshold(curPage.originalCanvasDataUrl, config, curPage.detectedWatermarks);
-        }
-      } else {
-        const selectedBoxes = curPage.detectedWatermarks.filter((b) => b.selected !== false);
-        cleanedUrl = await cleanImageWithColorThreshold(curPage.originalCanvasDataUrl, config, selectedBoxes);
+    setDocState((prev) => {
+      const copy = [...prev.pages];
+      if (copy[curIdx]) {
+        copy[curIdx].cleanedCanvasDataUrl = cleaned;
+        copy[curIdx].isProcessing = false;
       }
+      return { ...prev, pages: copy };
+    });
 
-      setDocState((prev) => {
-        const copy = [...prev.pages];
-        copy[curIdx].cleanedCanvasDataUrl = cleanedUrl;
-        copy[curIdx].isProcessing = false;
-        return { ...prev, pages: copy };
-      });
-
-      setSuccessToast(t.successNotification);
-    } catch (err: any) {
-      console.error('Removal error:', err);
-      setDocState((prev) => {
-        const copy = [...prev.pages];
-        copy[curIdx].isProcessing = false;
-        return { ...prev, pages: copy };
-      });
-    }
+    setSuccessToast(`تمت إزالة العلامات المائية من الصفحة ${curIdx + 1} بنجاح.`);
   };
 
-  // Batch process all pages
+  // Batch apply removal across ALL pages in the document
   const handleApplyAllPages = async () => {
     if (docState.pages.length === 0) return;
 
     setDocState((prev) => ({
       ...prev,
       isBatchProcessing: true,
-      batchProgress: 0,
+      batchProgress: 5,
     }));
 
-    try {
-      const total = docState.pages.length;
-      const updatedPages: PDFPageData[] = [...docState.pages];
+    const total = docState.pages.length;
+    const updatedPages: PDFPageData[] = [...docState.pages];
 
-      for (let i = 0; i < total; i++) {
-        const page = updatedPages[i];
-        const cleaned = await cleanImageWithColorThreshold(
-          page.originalCanvasDataUrl,
-          config,
-          page.detectedWatermarks
-        );
-        updatedPages[i] = {
-          ...page,
-          cleanedCanvasDataUrl: cleaned,
-          isProcessing: false,
-        };
+    for (let i = 0; i < total; i++) {
+      const page = updatedPages[i];
+      const cleaned = await cleanImageWithColorThreshold(
+        page.originalCanvasDataUrl,
+        config,
+        page.detectedWatermarks
+      );
+      updatedPages[i] = {
+        ...page,
+        cleanedCanvasDataUrl: cleaned,
+        isProcessing: false,
+      };
 
-        setDocState((prev) => ({
-          ...prev,
-          pages: [...updatedPages],
-          batchProgress: Math.round(((i + 1) / total) * 100),
-        }));
-      }
-
+      const progress = Math.round(((i + 1) / total) * 100);
       setDocState((prev) => ({
         ...prev,
-        isBatchProcessing: false,
-        batchProgress: 100,
+        pages: [...updatedPages],
+        batchProgress: progress,
       }));
-
-      setSuccessToast(t.allPagesCleaned);
-    } catch (err) {
-      console.error('Batch process error:', err);
-      setDocState((prev) => ({ ...prev, isBatchProcessing: false }));
     }
+
+    setDocState((prev) => ({
+      ...prev,
+      isBatchProcessing: false,
+      batchProgress: 100,
+    }));
+
+    setSuccessToast(t.allPagesCleaned);
   };
 
-  // Toggle single watermark checkbox
+  // Toggle bounding box selection
   const handleToggleBox = (boxId: string) => {
     const curIdx = docState.currentPageIndex;
     setDocState((prev) => {
@@ -430,11 +433,13 @@ export default function App() {
   const currentPage = docState.pages[docState.currentPageIndex];
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col antialiased">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col antialiased transition-colors duration-200">
       {/* Header */}
       <Header
         currentLang={lang}
         onToggleLang={() => setLang(lang === 'ar' ? 'en' : 'ar')}
+        isDarkMode={isDarkMode}
+        onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
         t={t}
         onOpenInfo={() => setShowHowItWorks(true)}
       />
@@ -443,15 +448,15 @@ export default function App() {
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col gap-6">
         {/* Error Alert */}
         {errorMessage && (
-          <div className="flex items-center gap-3 p-4 bg-rose-50 border border-rose-200 rounded-2xl text-rose-800 text-xs shadow-sm animate-in fade-in">
-            <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+          <div className="flex items-center gap-3 p-4 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 rounded-2xl text-rose-800 dark:text-rose-200 text-xs shadow-sm animate-in fade-in">
+            <AlertCircle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0" />
             <span>{errorMessage}</span>
           </div>
         )}
 
         {/* Success Toast */}
         {successToast && (
-          <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 bg-slate-900 border border-slate-800 rounded-2xl text-white text-xs shadow-2xl backdrop-blur-md animate-in slide-in-from-bottom-4">
+          <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 bg-slate-900 dark:bg-slate-800 border border-slate-800 dark:border-slate-700 rounded-2xl text-white text-xs shadow-2xl backdrop-blur-md animate-in slide-in-from-bottom-4">
             <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
             <span>{successToast}</span>
           </div>
@@ -461,15 +466,15 @@ export default function App() {
         {docState.pages.length === 0 ? (
           <div className="flex flex-col items-center justify-center my-auto py-8">
             {/* Hero Heading */}
-            <div className="text-center max-w-2xl mx-auto mb-8 flex flex-col gap-3">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-full text-xs font-bold mx-auto">
+            <div className="text-center max-w-3xl mx-auto mb-8 flex flex-col gap-3.5">
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-100 dark:border-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-full text-xs font-bold mx-auto shadow-2xs">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>تقنية إزالة العلامات المائية للـ PDF الأكثر دقة واحترافية</span>
+                <span>المحرك الأقوى مع حماية تامة للصور والألوان بنسبة 100%</span>
               </div>
-              <h2 className="text-3xl sm:text-5xl font-extrabold text-slate-900 tracking-tight leading-[1.15]">
-                أزل العلامات المائية والأختام من ملفات PDF <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-blue-500">بنقرة واحدة</span>
+              <h2 className="text-3xl sm:text-5xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-[1.18]">
+                أزل العلامات المائية والأختام من ملفات PDF <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-blue-500 dark:from-indigo-400 dark:to-blue-400">بدون تشويه المستند</span>
               </h2>
-              <p className="text-sm sm:text-base text-slate-500 leading-relaxed">{t.tagline}</p>
+              <p className="text-sm sm:text-base text-slate-500 dark:text-slate-400 leading-relaxed max-w-2xl mx-auto">{t.tagline}</p>
             </div>
 
             {/* Drop Zone Card */}
@@ -482,16 +487,16 @@ export default function App() {
               onDragLeave={() => setIsDraggingFile(false)}
               onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
-              className={`w-full max-w-2xl bg-white p-6 sm:p-8 rounded-[36px] shadow-2xl shadow-indigo-100 border border-slate-200/80 hover:border-indigo-300 transition-all cursor-pointer relative overflow-hidden group ${
+              className={`w-full max-w-2xl bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-[36px] shadow-2xl shadow-indigo-100/50 dark:shadow-none border border-slate-200/90 dark:border-slate-800 hover:border-indigo-400 dark:hover:border-indigo-600 transition-all cursor-pointer relative overflow-hidden group ${
                 isDraggingFile
-                  ? 'border-indigo-500 bg-indigo-50/30 scale-[1.01]'
+                  ? 'border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/30 scale-[1.01]'
                   : ''
               }`}
             >
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="application/pdf,.pdf"
+                accept="application/pdf,.pdf,image/png,image/jpeg,image/webp,.png,.jpg,.jpeg"
                 className="hidden"
                 onChange={(e) => {
                   if (e.target.files && e.target.files[0]) {
@@ -501,23 +506,23 @@ export default function App() {
               />
 
               {/* Free Badge */}
-              <div className="absolute top-4 left-4 bg-amber-400 text-amber-950 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-tight shadow-xs">
-                مجاني 100%
+              <div className="absolute top-4 left-4 bg-emerald-500 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-tight shadow-xs">
+                مجاني وسريع 100%
               </div>
 
-              <div className="border-2 border-dashed border-slate-200 rounded-[28px] p-8 sm:p-12 flex flex-col items-center justify-center text-center bg-slate-50/50 group-hover:bg-slate-50 transition-all">
-                <div className="w-16 h-16 rounded-2xl bg-white shadow-sm border border-slate-100 flex items-center justify-center text-indigo-600 group-hover:scale-105 transition-transform mb-4">
+              <div className="border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-[28px] p-8 sm:p-12 flex flex-col items-center justify-center text-center bg-slate-50/60 dark:bg-slate-950/40 group-hover:bg-slate-50 dark:group-hover:bg-slate-900/60 transition-all">
+                <div className="w-16 h-16 rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 flex items-center justify-center text-indigo-600 dark:text-indigo-400 group-hover:scale-105 transition-transform mb-4">
                   <FileUp className="w-8 h-8" />
                 </div>
 
-                <h3 className="text-base sm:text-lg font-extrabold text-slate-900 mb-1">
+                <h3 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white mb-1">
                   {isDraggingFile ? t.dropHere : t.uploadTitle}
                 </h3>
-                <p className="text-xs text-slate-500 mb-6 max-w-sm">{t.uploadSubtitle}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-6 max-w-sm">{t.uploadSubtitle}</p>
 
                 <button
                   type="button"
-                  className="w-full max-w-xs py-3.5 bg-indigo-600 group-hover:bg-indigo-700 text-white text-sm font-bold rounded-2xl shadow-lg shadow-indigo-200 transition flex items-center justify-center gap-2"
+                  className="w-full max-w-xs py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-2xl shadow-lg shadow-indigo-500/25 transition flex items-center justify-center gap-2"
                 >
                   <Upload className="w-4 h-4" />
                   <span>{t.browseFiles}</span>
@@ -536,16 +541,16 @@ export default function App() {
           /* State 2: Active PDF Workspace (Split-Screen Viewer & Controls) */
           <div className="flex flex-col gap-5">
             {/* Top Workspace Header Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-3 bg-white border border-slate-200/90 p-4 rounded-3xl shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 p-4 rounded-3xl shadow-sm transition-colors">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-2xl">
+                <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900 rounded-2xl">
                   <FileText className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900 max-w-xs sm:max-w-md truncate">
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white max-w-xs sm:max-w-md truncate">
                     {docState.fileName}
                   </h3>
-                  <span className="text-[11px] text-slate-500">
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
                     {docState.totalPages} {t.page} • {(docState.fileSize / 1024).toFixed(1)} KB
                   </span>
                 </div>
@@ -555,7 +560,7 @@ export default function App() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleReset}
-                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-full transition"
+                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition"
                   title={t.resetAll}
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
@@ -565,7 +570,7 @@ export default function App() {
                 <button
                   id="btn-open-export-modal"
                   onClick={() => setShowExportModal(true)}
-                  className="flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-full shadow-lg shadow-indigo-200 transition-all"
+                  className="flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-full shadow-lg shadow-indigo-500/25 transition-all"
                 >
                   <Download className="w-4 h-4" />
                   <span>{t.downloadPdf}</span>
@@ -575,15 +580,15 @@ export default function App() {
 
             {/* Batch Progress Bar if active */}
             {docState.isBatchProcessing && (
-              <div className="p-4 bg-white rounded-3xl border border-indigo-100 shadow-sm flex flex-col gap-2">
-                <div className="flex justify-between text-xs font-bold text-slate-800">
+              <div className="p-4 bg-white dark:bg-slate-900 rounded-3xl border border-indigo-100 dark:border-indigo-900 shadow-sm flex flex-col gap-2 transition-colors">
+                <div className="flex justify-between text-xs font-bold text-slate-800 dark:text-slate-200">
                   <span className="flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-indigo-600 animate-spin" />
+                    <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400 animate-spin" />
                     <span>جاري معالجة وتنظيف جميع صفحات المستند دفعة واحدة...</span>
                   </span>
-                  <span className="text-indigo-600 font-mono">{docState.batchProgress}%</span>
+                  <span className="text-indigo-600 dark:text-indigo-400 font-mono">{docState.batchProgress}%</span>
                 </div>
-                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                   <div
                     style={{ width: `${docState.batchProgress}%` }}
                     className="h-full bg-indigo-600 transition-all duration-300 rounded-full"
