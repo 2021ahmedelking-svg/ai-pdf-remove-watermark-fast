@@ -10,6 +10,8 @@ interface BeforeAfterSliderProps {
   t: LanguageStrings;
   isProcessing: boolean;
   onSelectBox?: (boxId: string) => void;
+  isManualMode?: boolean;
+  onAddManualBoxByClick?: (ymin: number, xmin: number, ymax: number, xmax: number) => void;
 }
 
 export const BeforeAfterSlider: React.FC<BeforeAfterSliderProps> = ({
@@ -20,6 +22,8 @@ export const BeforeAfterSlider: React.FC<BeforeAfterSliderProps> = ({
   t,
   isProcessing,
   onSelectBox,
+  isManualMode = false,
+  onAddManualBoxByClick,
 }) => {
   const [sliderPosition, setSliderPosition] = useState<number>(50); // 0 to 100
   const [isDragging, setIsDragging] = useState<boolean>(false);
@@ -198,20 +202,50 @@ export const BeforeAfterSlider: React.FC<BeforeAfterSliderProps> = ({
                 detectedWatermarks.map((box) => (
                   <div
                     key={box.id}
-                    onClick={() => onSelectBox?.(box.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectBox?.(box.id);
+                    }}
                     style={{
                       top: `${box.ymin / 10}%`,
                       left: `${box.xmin / 10}%`,
                       height: `${(box.ymax - box.ymin) / 10}%`,
                       width: `${(box.xmax - box.xmin) / 10}%`,
                     }}
-                    className={`absolute cursor-pointer border-2 transition-all rounded-lg ${
+                    title={box.label || 'منطقة علامة مائية'}
+                    className={`absolute cursor-pointer border-2 transition-all rounded-lg flex items-start justify-end p-1 ${
                       box.selected !== false
-                        ? 'border-indigo-500 bg-indigo-500/15 ring-2 ring-indigo-400/40'
+                        ? 'border-indigo-500 bg-indigo-500/20 ring-2 ring-indigo-400/50'
                         : 'border-slate-400/60 bg-slate-400/10'
                     }`}
-                  />
+                  >
+                    {box.label && (
+                      <span className="bg-indigo-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm truncate max-w-[120px] pointer-events-none">
+                        {box.label}
+                      </span>
+                    )}
+                  </div>
                 ))}
+
+              {/* Click to add box in manual mode */}
+              {isManualMode && (
+                <div
+                  onClick={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const clickX = ((e.clientX - rect.left) / rect.width) * 1000;
+                    const clickY = ((e.clientY - rect.top) / rect.height) * 1000;
+                    const halfW = 120;
+                    const halfH = 80;
+                    const ymin = Math.max(0, Math.round(clickY - halfH));
+                    const ymax = Math.min(1000, Math.round(clickY + halfH));
+                    const xmin = Math.max(0, Math.round(clickX - halfW));
+                    const xmax = Math.min(1000, Math.round(clickX + halfW));
+                    onAddManualBoxByClick?.(ymin, xmin, ymax, xmax);
+                  }}
+                  className="absolute inset-0 cursor-crosshair z-10"
+                  title="انقر في أي مكان لتحديد وإشارة مكان العلامة المائية للـ AI"
+                />
+              )}
             </div>
 
             {/* Draggable Divider Line */}

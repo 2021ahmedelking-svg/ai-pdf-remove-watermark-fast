@@ -38,7 +38,7 @@ app.get('/api/health', (req, res) => {
 // API: AI Watermark Detection on Page Image
 app.post('/api/gemini/detect-watermarks', async (req, res) => {
   try {
-    const { imageBase64, pageNumber, customKeywords } = req.body;
+    const { imageBase64, pageNumber, customKeywords, manualPrompt, userSelectedBoxes } = req.body;
     if (!imageBase64) {
       return res.status(400).json({ error: 'imageBase64 is required' });
     }
@@ -50,7 +50,7 @@ app.post('/api/gemini/detect-watermarks', async (req, res) => {
         watermarks: [
           {
             id: 'wm-sample-1',
-            label: 'Diagonal Watermark Overlay',
+            label: customKeywords || manualPrompt || 'Diagonal Watermark Overlay',
             type: 'diagonal_text',
             box2d: [300, 150, 700, 850], // normalized 0-1000 [ymin, xmin, ymax, xmax]
             confidence: 0.88,
@@ -63,16 +63,27 @@ app.post('/api/gemini/detect-watermarks', async (req, res) => {
 
     const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, '');
 
-    const prompt = `You are an expert document forensics AI specializing in PDF and exam sheet watermark detection.
+    let prompt = `You are an expert document forensics AI specializing in PDF and exam sheet watermark detection.
 Analyze this document image in high detail. Detect ALL watermark elements, including:
 1. Margin watermarks and vertical/horizontal phone numbers (e.g. phone numbers like 0114338784 on left/right margins or headers/footers).
 2. Diagonal repetitive background watermarks (e.g. teacher names, subject names, centers, phone numbers).
 3. Translucent stamps, publisher marks, CamScanner badges, "DRAFT", "CONFIDENTIAL", "SAMPLE", "COPY".
-4. Background tint washes and tinted bounding containers.
-${customKeywords ? `Special focus keywords requested by user: "${customKeywords}".` : ''}
+4. Background tint washes and tinted bounding containers.`;
 
-For EVERY detected watermark element, return the exact normalized bounding box coordinates on a 0-1000 scale: [ymin, xmin, ymax, xmax].
-Set type to: 'margin_watermark' | 'diagonal_text' | 'header_footer_stamp' | 'logo_seal' | 'tiled_pattern' | 'background_wash'.`;
+    if (manualPrompt && manualPrompt.trim()) {
+      prompt += `\nCRITICAL USER DIRECTIVE: The user explicitly specified what to remove: "${manualPrompt.trim()}". Prioritize finding every occurrence of this specific text, logo, stamp, or region with extreme precision!`;
+    }
+
+    if (customKeywords && customKeywords.trim()) {
+      prompt += `\nSpecial focus keywords requested by user: "${customKeywords.trim()}".`;
+    }
+
+    if (userSelectedBoxes && Array.isArray(userSelectedBoxes) && userSelectedBoxes.length > 0) {
+      prompt += `\nThe user highlighted these specific coordinate regions on the page to inspect and clean: ${JSON.stringify(userSelectedBoxes)}. Locate the exact watermark elements inside or overlapping these areas.`;
+    }
+
+    prompt += `\nFor EVERY detected watermark element, return the exact normalized bounding box coordinates on a 0-1000 scale: [ymin, xmin, ymax, xmax].
+Set type to: 'margin_watermark' | 'diagonal_text' | 'header_footer_stamp' | 'logo_seal' | 'tiled_pattern' | 'background_wash' | 'custom_prompt'.`;
 
     const candidateModels = ['gemini-2.5-flash', 'gemini-3.7-flash', 'gemini-2.5-pro'];
     let lastError: any = null;

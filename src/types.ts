@@ -8,6 +8,14 @@ export type WatermarkPresetType =
   | 'aggressive_deep'      // تنظيف شامل فائق الحساسية
   | 'custom';              // تخصيص يدوي
 
+export type AppOperatingMode = 'auto' | 'manual';
+
+export interface CustomManualTarget {
+  id: string;
+  textQuery: string;
+  box2d?: [number, number, number, number]; // [ymin, xmin, ymax, xmax] 0-1000
+}
+
 export interface BoundingBox {
   id: string;
   ymin: number; // 0 - 1000
@@ -15,7 +23,7 @@ export interface BoundingBox {
   ymax: number;
   xmax: number;
   label?: string;
-  type?: 'diagonal_text' | 'header_footer_stamp' | 'logo_seal' | 'tiled_pattern' | 'background_wash' | 'manual_box' | 'margin_watermark';
+  type?: 'diagonal_text' | 'header_footer_stamp' | 'logo_seal' | 'tiled_pattern' | 'background_wash' | 'manual_box' | 'margin_watermark' | 'custom_prompt';
   confidence?: number;
   color?: string;
   selected?: boolean;

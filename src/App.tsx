@@ -5,6 +5,7 @@ import {
   BoundingBox,
   LanguageStrings,
   PDFPageData,
+  AppOperatingMode,
 } from './types';
 import { arTranslations, enTranslations } from './utils/translations';
 import { loadAndRenderPdf, loadAndRenderImageFile, fileToArrayBuffer, createSamplePdf } from './utils/pdfEngine';
@@ -12,6 +13,7 @@ import { cleanImageWithColorThreshold, inpaintSelectedBoxes } from './utils/imag
 import { Header } from './components/Header';
 import { BeforeAfterSlider } from './components/BeforeAfterSlider';
 import { EngineSettings } from './components/EngineSettings';
+import { ManualGuideControls } from './components/ManualGuideControls';
 import { WatermarkList } from './components/WatermarkList';
 import { PageThumbnailStrip } from './components/PageThumbnailStrip';
 import { SamplePdfPicker } from './components/SamplePdfPicker';
@@ -32,6 +34,8 @@ import {
   Lock,
   Eye,
   Sliders,
+  MousePointerClick,
+  Info,
 } from 'lucide-react';
 
 export default function App() {
@@ -39,6 +43,15 @@ export default function App() {
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     return localStorage.getItem('pdfclear_theme') === 'dark';
   });
+
+  // Operating Mode: 'auto' (Automatic detection) vs 'manual' (User guide/prompt)
+  const [appMode, setAppMode] = useState<AppOperatingMode>('auto');
+  const [manualPrompt, setManualPrompt] = useState<string>('');
+
+  // Upload progress simulation state
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [uploadStageText, setUploadStageText] = useState<string>('');
 
   const t: LanguageStrings = lang === 'ar' ? arTranslations : enTranslations;
 
@@ -107,10 +120,14 @@ export default function App() {
     }
   }, [successToast]);
 
-  // Load PDF or Image file into workspace
+  // Load PDF or Image file into workspace with animated realistic progress tracking
   const handleLoadPdfFile = async (file: File) => {
     try {
       setErrorMessage(null);
+      setIsUploading(true);
+      setUploadProgress(15);
+      setUploadStageText('جاري قراءة واستيراد الملف بأمان...');
+
       setDocState((prev) => ({
         ...prev,
         isAnalyzing: true,
@@ -118,6 +135,11 @@ export default function App() {
         fileName: file.name,
         fileSize: file.size,
       }));
+
+      // Progress animation
+      await new Promise((r) => setTimeout(r, 160));
+      setUploadProgress(45);
+      setUploadStageText('جاري فك تشفير وتوليد صفحات المستند بدقة عالية (HD)...');
 
       const isImage = file.type.startsWith('image/') || /\.(png|jpe?g|webp|bmp)$/i.test(file.name);
       let renderedPages: PDFPageData[] = [];
@@ -131,6 +153,8 @@ export default function App() {
         totalPages = res.totalPages;
       } else {
         const arrayBuffer = await fileToArrayBuffer(file);
+        setUploadProgress(70);
+        setUploadStageText('جاري بناء طبقات العرض وحماية الألوان...');
         const res = await loadAndRenderPdf(arrayBuffer);
         renderedPages = res.pages;
         rawPdfBase64 = res.rawPdfBase64;
@@ -140,6 +164,10 @@ export default function App() {
       if (renderedPages.length === 0) {
         throw new Error('لم يتم العثور على صفحات قابلة للعرض في هذا الملف.');
       }
+
+      setUploadProgress(95);
+      setUploadStageText('اكتمل التحميل! جاري تجهيز بيئة المعالجة الذكية...');
+      await new Promise((r) => setTimeout(r, 140));
 
       setDocState({
         file,
@@ -154,12 +182,16 @@ export default function App() {
         batchProgress: 0,
       });
 
-      // Run AI watermark detection & auto-clean on the first page
-      if (renderedPages[0]) {
+      setIsUploading(false);
+      setUploadProgress(100);
+
+      // Auto mode triggers automatic detection & clean preview immediately
+      if (appMode === 'auto' && renderedPages[0]) {
         runWatermarkDetection(0, renderedPages[0].originalCanvasDataUrl);
       }
     } catch (err: any) {
       console.error('Error loading PDF/Image:', err);
+      setIsUploading(false);
       setErrorMessage(err.message || 'فشل تحميل الملف. يرجى التأكد من صحة الملف أو الصورة.');
       setDocState((prev) => ({ ...prev, isAnalyzing: false }));
     }
@@ -197,8 +229,13 @@ export default function App() {
     }
   };
 
-  // Run AI & Heuristic Detection on a page
-  const runWatermarkDetection = async (pageIdx: number, imageBase64: string) => {
+  // Run AI & Heuristic Detection on a page (supports custom manual prompt)
+  const runWatermarkDetection = async (
+    pageIdx: number,
+    imageBase64: string,
+    customPrompt?: string,
+    specificBoxes?: BoundingBox[]
+  ) => {
     try {
       setDocState((prev) => {
         const copy = [...prev.pages];
@@ -216,6 +253,8 @@ export default function App() {
             imageBase64,
             pageNumber: pageIdx + 1,
             customKeywords: config.customKeywords,
+            manualPrompt: customPrompt || (appMode === 'manual' ? manualPrompt : ''),
+            userSelectedBoxes: specificBoxes,
           }),
         });
 
@@ -228,9 +267,9 @@ export default function App() {
               xmin: w.box2d?.[1] ?? 100,
               ymax: w.box2d?.[2] ?? 750,
               xmax: w.box2d?.[3] ?? 900,
-              label: w.label || 'Watermark',
+              label: w.label || (customPrompt ? customPrompt : 'Watermark'),
               type: w.type || 'diagonal_text',
-              confidence: w.confidence || 0.9,
+              confidence: w.confidence || 0.92,
               color: w.color,
               selected: true,
             }));
@@ -238,6 +277,11 @@ export default function App() {
         }
       } catch (e) {
         console.warn('Backend detection call skipped, using local heuristics', e);
+      }
+
+      // Merge with any specific boxes passed by the user
+      if (specificBoxes && specificBoxes.length > 0) {
+        detected = [...specificBoxes, ...detected.filter((d) => !specificBoxes.some((sb) => sb.id === d.id))];
       }
 
       // If no watermarks detected by AI or API unavailable, add intelligent heuristic default diagonal region
@@ -249,7 +293,7 @@ export default function App() {
             xmin: 120,
             ymax: 720,
             xmax: 880,
-            label: 'Watermark Pattern / Diagonal Text',
+            label: customPrompt || 'Watermark Pattern / Diagonal Text',
             type: 'diagonal_text',
             confidence: 0.85,
             selected: true,
@@ -269,6 +313,10 @@ export default function App() {
         }
         return { ...prev, pages: copy };
       });
+
+      if (customPrompt) {
+        setSuccessToast(`تم كشف واستئصال "${customPrompt}" بنجاح.`);
+      }
     } catch (err: any) {
       console.error('Detection error:', err);
       setDocState((prev) => {
@@ -393,6 +441,49 @@ export default function App() {
     });
   };
 
+  // Add manual box directly (from pointing or presets)
+  const handleAddManualBox = (newBox: BoundingBox) => {
+    const curIdx = docState.currentPageIndex;
+    setDocState((prev) => {
+      const copy = [...prev.pages];
+      const page = copy[curIdx];
+      if (page) {
+        page.detectedWatermarks = [...page.detectedWatermarks, newBox];
+      }
+      return { ...prev, pages: copy };
+    });
+    setSuccessToast('تمت إضافة المنطقة المحددة. يمكنك النقر على زر تطبيق الإزالة.');
+  };
+
+  // Add manual box by clicking on the document canvas
+  const handleAddManualBoxByClick = (ymin: number, xmin: number, ymax: number, xmax: number) => {
+    const newBox: BoundingBox = {
+      id: `click-box-${Date.now()}`,
+      ymin,
+      xmin,
+      ymax,
+      xmax,
+      label: manualPrompt ? manualPrompt.slice(0, 24) : 'منطقة محددة بالنقر',
+      type: 'manual_box',
+      selected: true,
+      confidence: 1.0,
+    };
+    handleAddManualBox(newBox);
+  };
+
+  // Remove box
+  const handleRemoveBox = (id: string) => {
+    const curIdx = docState.currentPageIndex;
+    setDocState((prev) => {
+      const copy = [...prev.pages];
+      const page = copy[curIdx];
+      if (page) {
+        page.detectedWatermarks = page.detectedWatermarks.filter((b) => b.id !== id);
+      }
+      return { ...prev, pages: copy };
+    });
+  };
+
   // Remove a single specific watermark box
   const handleRemoveSingleBox = async (box: BoundingBox) => {
     const curIdx = docState.currentPageIndex;
@@ -428,6 +519,7 @@ export default function App() {
       batchProgress: 0,
     });
     setErrorMessage(null);
+    setManualPrompt('');
   };
 
   const currentPage = docState.pages[docState.currentPageIndex];
@@ -462,6 +554,62 @@ export default function App() {
           </div>
         )}
 
+        {/* TOP MODE TOGGLE BAR: الوضع التلقائي vs الوضع اليدوي */}
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 p-2.5 sm:p-3 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-sm transition-colors">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-1.5 px-2">
+              <Sliders className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+              <span>وضع التشغيل:</span>
+            </span>
+
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl border border-slate-200/80 dark:border-slate-700">
+              {/* الوضع التلقائي */}
+              <button
+                type="button"
+                id="btn-mode-auto"
+                onClick={() => {
+                  setAppMode('auto');
+                  if (currentPage && currentPage.detectedWatermarks.length === 0) {
+                    runWatermarkDetection(docState.currentPageIndex, currentPage.originalCanvasDataUrl);
+                  }
+                }}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                  appMode === 'auto'
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/25'
+                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>الوضع التلقائي (Auto)</span>
+              </button>
+
+              {/* الوضع اليدوي */}
+              <button
+                type="button"
+                id="btn-mode-manual"
+                onClick={() => setAppMode('manual')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                  appMode === 'manual'
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/25'
+                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                <MousePointerClick className="w-3.5 h-3.5" />
+                <span>الوضع اليدوي (Manual / Prompt)</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="text-[11px] text-slate-500 dark:text-slate-400 px-3 hidden md:flex items-center gap-1.5">
+            <Info className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+            <span>
+              {appMode === 'auto'
+                ? 'يكتشف ويستأصل العلامات والأختام والأرقام تلقائياً مع حماية كاملة للألوان والصور'
+                : 'أشر للـ AI على مكان العلامة أو اكتب له النص المكتوب المراد حذفه بدقة متناهية'}
+            </span>
+          </div>
+        </div>
+
         {/* State 1: Upload & Sample Picker Screen */}
         {docState.pages.length === 0 ? (
           <div className="flex flex-col items-center justify-center my-auto py-8">
@@ -486,7 +634,7 @@ export default function App() {
               }}
               onDragLeave={() => setIsDraggingFile(false)}
               onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => !isUploading && fileInputRef.current?.click()}
               className={`w-full max-w-2xl bg-white dark:bg-slate-900 p-6 sm:p-8 rounded-[36px] shadow-2xl shadow-indigo-100/50 dark:shadow-none border border-slate-200/90 dark:border-slate-800 hover:border-indigo-400 dark:hover:border-indigo-600 transition-all cursor-pointer relative overflow-hidden group ${
                 isDraggingFile
                   ? 'border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/30 scale-[1.01]'
@@ -510,31 +658,60 @@ export default function App() {
                 مجاني وسريع 100%
               </div>
 
-              <div className="border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-[28px] p-8 sm:p-12 flex flex-col items-center justify-center text-center bg-slate-50/60 dark:bg-slate-950/40 group-hover:bg-slate-50 dark:group-hover:bg-slate-900/60 transition-all">
-                <div className="w-16 h-16 rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 flex items-center justify-center text-indigo-600 dark:text-indigo-400 group-hover:scale-105 transition-transform mb-4">
-                  <FileUp className="w-8 h-8" />
+              {/* Upload Progress Overlay */}
+              {isUploading ? (
+                <div className="border-2 border-dashed border-indigo-300 dark:border-indigo-700 rounded-[28px] p-8 sm:p-12 flex flex-col items-center justify-center text-center bg-indigo-50/60 dark:bg-indigo-950/40 animate-pulse">
+                  <div className="w-16 h-16 rounded-2xl bg-indigo-600 text-white shadow-lg flex items-center justify-center mb-4">
+                    <Sparkles className="w-8 h-8 animate-spin" />
+                  </div>
+                  <h3 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white mb-2">
+                    جاري رفع وتحليل المستند...
+                  </h3>
+                  <p className="text-xs text-indigo-700 dark:text-indigo-300 font-semibold mb-5">
+                    {uploadStageText}
+                  </p>
+
+                  {/* Upload Progress Bar */}
+                  <div className="w-full max-w-sm flex flex-col gap-2">
+                    <div className="w-full h-3 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden p-0.5 border border-indigo-200 dark:border-indigo-800">
+                      <div
+                        style={{ width: `${uploadProgress}%` }}
+                        className="h-full bg-gradient-to-r from-indigo-600 to-blue-500 rounded-full transition-all duration-300 shadow-sm"
+                      />
+                    </div>
+                    <div className="flex justify-between text-[11px] font-mono font-bold text-slate-600 dark:text-slate-400 px-1">
+                      <span>التقدم</span>
+                      <span>{uploadProgress}%</span>
+                    </div>
+                  </div>
                 </div>
+              ) : (
+                <div className="border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-[28px] p-8 sm:p-12 flex flex-col items-center justify-center text-center bg-slate-50/60 dark:bg-slate-950/40 group-hover:bg-slate-50 dark:group-hover:bg-slate-900/60 transition-all">
+                  <div className="w-16 h-16 rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 flex items-center justify-center text-indigo-600 dark:text-indigo-400 group-hover:scale-105 transition-transform mb-4">
+                    <FileUp className="w-8 h-8" />
+                  </div>
 
-                <h3 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white mb-1">
-                  {isDraggingFile ? t.dropHere : t.uploadTitle}
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mb-6 max-w-sm">{t.uploadSubtitle}</p>
+                  <h3 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white mb-1">
+                    {isDraggingFile ? t.dropHere : t.uploadTitle}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-6 max-w-sm">{t.uploadSubtitle}</p>
 
-                <button
-                  type="button"
-                  className="w-full max-w-xs py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-2xl shadow-lg shadow-indigo-500/25 transition flex items-center justify-center gap-2"
-                >
-                  <Upload className="w-4 h-4" />
-                  <span>{t.browseFiles}</span>
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    className="w-full max-w-xs py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-2xl shadow-lg shadow-indigo-500/25 transition flex items-center justify-center gap-2"
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span>{t.browseFiles}</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Ready-to-test Samples */}
             <SamplePdfPicker
               onSelectSample={handleSelectSample}
               t={t}
-              isLoading={docState.isAnalyzing}
+              isLoading={docState.isAnalyzing || isUploading}
             />
           </div>
         ) : (
@@ -604,7 +781,7 @@ export default function App() {
               onSelectPage={(idx) => {
                 setDocState((prev) => ({ ...prev, currentPageIndex: idx }));
                 const targetPage = docState.pages[idx];
-                if (targetPage && targetPage.detectedWatermarks.length === 0) {
+                if (targetPage && targetPage.detectedWatermarks.length === 0 && appMode === 'auto') {
                   runWatermarkDetection(idx, targetPage.originalCanvasDataUrl);
                 }
               }}
@@ -624,41 +801,73 @@ export default function App() {
                     t={t}
                     isProcessing={currentPage.isProcessing}
                     onSelectBox={handleToggleBox}
+                    isManualMode={appMode === 'manual'}
+                    onAddManualBoxByClick={handleAddManualBoxByClick}
                   />
                 )}
               </div>
 
-              {/* Right Side: Removal Controls & Watermark List (4 cols) */}
+              {/* Right Side: Mode Controls (Auto Settings OR Manual Guide) (4 cols) */}
               <div className="lg:col-span-4 flex flex-col gap-4">
-                {/* Engine Settings */}
-                <EngineSettings
-                  config={config}
-                  onChangeConfig={handleUpdateConfig}
-                  t={t}
-                  onOpenManualBrush={() => setShowManualBrush(true)}
-                  onRunDetection={() =>
-                    currentPage &&
-                    runWatermarkDetection(
-                      docState.currentPageIndex,
-                      currentPage.originalCanvasDataUrl
-                    )
-                  }
-                  onApplyCurrentPage={handleApplyCurrentPage}
-                  onApplyAllPages={handleApplyAllPages}
-                  isProcessing={currentPage?.isProcessing || docState.isBatchProcessing}
-                  totalPages={docState.totalPages}
-                />
+                {appMode === 'auto' ? (
+                  <>
+                    {/* Auto Mode Engine Settings */}
+                    <EngineSettings
+                      config={config}
+                      onChangeConfig={handleUpdateConfig}
+                      t={t}
+                      onOpenManualBrush={() => setShowManualBrush(true)}
+                      onRunDetection={() =>
+                        currentPage &&
+                        runWatermarkDetection(
+                          docState.currentPageIndex,
+                          currentPage.originalCanvasDataUrl
+                        )
+                      }
+                      onApplyCurrentPage={handleApplyCurrentPage}
+                      onApplyAllPages={handleApplyAllPages}
+                      isProcessing={currentPage?.isProcessing || docState.isBatchProcessing}
+                      totalPages={docState.totalPages}
+                    />
 
-                {/* Detected Watermarks List */}
-                {currentPage && (
-                  <WatermarkList
-                    watermarks={currentPage.detectedWatermarks}
-                    t={t}
-                    onToggleBox={handleToggleBox}
-                    onRemoveSingleBox={handleRemoveSingleBox}
-                    onRemoveAllDetected={handleApplyCurrentPage}
-                    isProcessing={currentPage.isProcessing}
-                  />
+                    {/* Detected Watermarks List */}
+                    {currentPage && (
+                      <WatermarkList
+                        watermarks={currentPage.detectedWatermarks}
+                        t={t}
+                        onToggleBox={handleToggleBox}
+                        onRemoveSingleBox={handleRemoveSingleBox}
+                        onRemoveAllDetected={handleApplyCurrentPage}
+                        isProcessing={currentPage.isProcessing}
+                      />
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {/* Manual Mode: User guides AI by prompt or by pointing */}
+                    {currentPage && (
+                      <ManualGuideControls
+                        detectedWatermarks={currentPage.detectedWatermarks}
+                        manualPrompt={manualPrompt}
+                        onChangeManualPrompt={setManualPrompt}
+                        onRunAiManualAnalysis={(promptText, boxes) => {
+                          runWatermarkDetection(
+                            docState.currentPageIndex,
+                            currentPage.originalCanvasDataUrl,
+                            promptText,
+                            boxes
+                          );
+                        }}
+                        onAddManualBox={handleAddManualBox}
+                        onToggleBox={handleToggleBox}
+                        onRemoveBox={handleRemoveBox}
+                        onOpenManualEraser={() => setShowManualBrush(true)}
+                        onApplyManualCleaning={handleApplyCurrentPage}
+                        isProcessing={currentPage.isProcessing}
+                        t={t}
+                      />
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -683,19 +892,27 @@ export default function App() {
         />
       )}
 
-      {/* Export & Download Modal */}
+      {/* Export & Quality Modal */}
       {showExportModal && (
         <ExportModal
+          isOpen={showExportModal}
+          onClose={() => setShowExportModal(false)}
           pages={docState.pages}
-          currentPageIndex={docState.currentPageIndex}
+          rawPdfBase64={docState.rawPdfBase64}
           fileName={docState.fileName}
           t={t}
-          onClose={() => setShowExportModal(false)}
         />
       )}
 
-      {/* How it Works Modal */}
-      {showHowItWorks && <HowItWorksModal onClose={() => setShowHowItWorks(false)} />}
+      {/* How it works Information Modal */}
+      {showHowItWorks && (
+        <HowItWorksModal
+          isOpen={showHowItWorks}
+          onClose={() => setShowHowItWorks(false)}
+          t={t}
+          currentLang={lang}
+        />
+      )}
     </div>
   );
 }

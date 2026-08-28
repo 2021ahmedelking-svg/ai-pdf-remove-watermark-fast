@@ -168,42 +168,66 @@ export async function createSamplePdf(type: 'contract' | 'academic' | 'invoice' 
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, 1200, 1600);
 
-      // Question 13 Container / Header
+      // Question 13 Container / Header with Light Blue Background
+      ctx.save();
+      // Light blue rounded question container
+      ctx.fillStyle = '#f0f6fc';
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(60, 40, 1080, 80, 12);
+      ctx.fill();
+      ctx.stroke();
+
+      // Red Question Badge (1)
+      ctx.fillStyle = '#dc2626';
+      ctx.beginPath();
+      ctx.roundRect(1070, 52, 56, 56, 8);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 28px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('١', 1098, 90);
+
+      // Question Header Text
       ctx.fillStyle = '#0f172a';
-      ctx.font = 'bold 24px sans-serif';
+      ctx.font = 'bold 22px sans-serif';
+      ctx.textAlign = 'right';
       ctx.direction = 'rtl';
-      ctx.fillText('١٣  الشكل المقابل يوضح المنظر العلوي لإحدى فقرات العمود الفقري ، ادرسه جيدًا ثم أجب :', 1140, 70);
+      ctx.fillText('الدعامة في الكائنات الحية والتركيب العظمي - ادرسه جيدًا ثم أجب :', 1050, 88);
+      ctx.restore();
 
       // Red Question 1
       ctx.fillStyle = '#b91c1c';
       ctx.font = 'bold 22px sans-serif';
-      ctx.fillText('(١)  في أي منطقة توجد الفقرة المقابلة في جسم الإنسان ؟', 1140, 120);
+      ctx.direction = 'rtl';
+      ctx.fillText('(١)  في أي منطقة توجد الفقرة المقابلة في جسم الإنسان ؟', 1140, 160);
 
       // Dotted underline
       ctx.fillStyle = '#334155';
       ctx.font = '20px monospace';
-      ctx.fillText('.......................................................................................................', 1140, 160);
+      ctx.fillText('.......................................................................................................', 1140, 200);
 
       // Red Question 2
       ctx.fillStyle = '#b91c1c';
       ctx.font = 'bold 22px sans-serif';
-      ctx.fillText('(٢)  أي مكونات الجهاز العصبي المركزي يمر في التركيب (X) ؟', 1140, 210);
+      ctx.fillText('(٢)  أي مكونات الجهاز العصبي المركزي يمر في التركيب (X) ؟', 1140, 250);
       ctx.fillStyle = '#334155';
-      ctx.fillText('.......................................................................................................', 1140, 250);
+      ctx.fillText('.......................................................................................................', 1140, 290);
 
       // Red Question 3
       ctx.fillStyle = '#b91c1c';
       ctx.font = 'bold 22px sans-serif';
-      ctx.fillText('(٣)  أي أجزاء الجمجمة يتمفصل مع التركيب (Y) ؟', 1140, 300);
+      ctx.fillText('(٣)  أي أجزاء الجمجمة يتمفصل مع التركيب (Y) ؟', 1140, 340);
       ctx.fillStyle = '#334155';
-      ctx.fillText('.......................................................................................................', 1140, 340);
+      ctx.fillText('.......................................................................................................', 1140, 380);
 
       // Vertebra Diagram illustration (Yellow bone body, purple facets, black pointer arrows)
       ctx.save();
       // Bone Body (yellow/tan)
       ctx.fillStyle = '#eab308';
       ctx.beginPath();
-      ctx.ellipse(300, 220, 90, 60, 0, 0, Math.PI * 2);
+      ctx.ellipse(300, 260, 85, 55, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.lineWidth = 3;
       ctx.strokeStyle = '#a16207';
@@ -212,157 +236,218 @@ export async function createSamplePdf(type: 'contract' | 'academic' | 'invoice' 
       // Neural arch hole
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.ellipse(300, 210, 35, 25, 0, 0, Math.PI * 2);
+      ctx.ellipse(300, 250, 32, 22, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
 
       // Articular facets (purple)
       ctx.fillStyle = '#9333ea';
       ctx.beginPath();
-      ctx.arc(240, 175, 18, 0, Math.PI * 2);
+      ctx.arc(245, 220, 16, 0, Math.PI * 2);
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(360, 175, 18, 0, Math.PI * 2);
+      ctx.arc(355, 220, 16, 0, Math.PI * 2);
       ctx.fill();
 
       // Pointer Arrow X (to canal)
       ctx.strokeStyle = '#0f172a';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(180, 210);
-      ctx.lineTo(270, 210);
+      ctx.moveTo(180, 250);
+      ctx.lineTo(270, 250);
       ctx.stroke();
       ctx.fillStyle = '#0f172a';
       ctx.font = 'bold 22px sans-serif';
       ctx.direction = 'ltr';
-      ctx.fillText('X', 155, 218);
+      ctx.fillText('X', 155, 258);
 
       // Pointer Arrow Y (to facet)
       ctx.beginPath();
-      ctx.moveTo(420, 150);
-      ctx.lineTo(375, 170);
+      ctx.moveTo(415, 195);
+      ctx.lineTo(370, 215);
       ctx.stroke();
-      ctx.fillText('Y', 430, 150);
+      ctx.fillText('Y', 425, 195);
       ctx.restore();
 
       // Divider Line
       ctx.strokeStyle = '#cbd5e1';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(60, 410);
-      ctx.lineTo(1140, 410);
+      ctx.moveTo(60, 440);
+      ctx.lineTo(1140, 440);
       ctx.stroke();
 
       // Question 14 Header
       ctx.fillStyle = '#0f172a';
       ctx.font = 'bold 24px sans-serif';
       ctx.direction = 'rtl';
-      ctx.fillText('١٤  الرسم البياني المقابل يوضح التغير في حجم فقرات العمود الفقرى المتمفصلة فى شخص بالغ ، ادرسه جيدًا ثم أجب:', 1140, 460);
+      ctx.fillText('١٤  الرسم البياني المقابل يوضح كمية المواد المترسبة في جدر بعض الخلايا النباتية (A, B, C, D) :', 1140, 490);
+
+      // Legend for Bar Chart (Cellulose, Lignin, Suberin, Cutin)
+      ctx.save();
+      const lx = 480;
+      const ly = 540;
+
+      // Cutin (Yellow)
+      ctx.fillStyle = '#fef08a';
+      ctx.fillRect(lx + 480, ly - 18, 22, 22);
+      ctx.strokeRect(lx + 480, ly - 18, 22, 22);
+      ctx.fillStyle = '#1e293b';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.fillText('كيوتين', lx + 470, ly);
+
+      // Suberin (Pink)
+      ctx.fillStyle = '#fbcfe8';
+      ctx.fillRect(lx + 340, ly - 18, 22, 22);
+      ctx.strokeRect(lx + 340, ly - 18, 22, 22);
+      ctx.fillStyle = '#1e293b';
+      ctx.fillText('سيوبرين', lx + 330, ly);
+
+      // Lignin (Green)
+      ctx.fillStyle = '#bbf7d0';
+      ctx.fillRect(lx + 200, ly - 18, 22, 22);
+      ctx.strokeRect(lx + 200, ly - 18, 22, 22);
+      ctx.fillStyle = '#1e293b';
+      ctx.fillText('لجنين', lx + 190, ly);
+
+      // Cellulose (Light Blue)
+      ctx.fillStyle = '#bae6fd';
+      ctx.fillRect(lx + 60, ly - 18, 22, 22);
+      ctx.strokeRect(lx + 60, ly - 18, 22, 22);
+      ctx.fillStyle = '#1e293b';
+      ctx.fillText('سليلوز', lx + 50, ly);
+      ctx.restore();
 
       // Red Question 14 (1)
       ctx.fillStyle = '#b91c1c';
       ctx.font = 'bold 22px sans-serif';
-      ctx.fillText('(١)  أي النقاط الموضحة على الرسم تمثل مجموعة الفقرات الأكثر عرضة لحدوث انزلاق غضروفي ؟', 1140, 510);
+      ctx.direction = 'rtl';
+      ctx.fillText('(١)  ما نوع الدعامة التي تتميز بها الخلايا (A) و (C) ؟', 1140, 600);
       ctx.fillStyle = '#334155';
-      ctx.fillText('.......................................................................................................', 1140, 550);
+      ctx.fillText('.......................................................................................................', 1140, 640);
 
       // Red Question 14 (2)
       ctx.fillStyle = '#b91c1c';
       ctx.font = 'bold 22px sans-serif';
-      ctx.fillText('(٢)  أي النقاط الموضحة على الرسم تمثل مجموعة الفقرات التي تساعد في حماية القلب والرئتين ؟', 1140, 600);
+      ctx.fillText('(٢)  ما نوع النسيج الذي تمثله الخلايا (D) ؟', 1140, 690);
       ctx.fillStyle = '#334155';
-      ctx.fillText('.......................................................................................................', 1140, 640);
+      ctx.fillText('.......................................................................................................', 1140, 730);
 
-      // Graph with Cyan Gridlines & Points (ل), (م), (ن)
+      // Red Question 14 (3)
+      ctx.fillStyle = '#b91c1c';
+      ctx.font = 'bold 22px sans-serif';
+      ctx.fillText('(٣)  أي الخلايا تفقد دعامتها أسرع عند الجفاف ؟', 1140, 780);
+      ctx.fillStyle = '#334155';
+      ctx.fillText('.......................................................................................................', 1140, 820);
+
+      // Plant Cells Bar Chart with Cyan Gridlines
       ctx.save();
-      const gx = 180;
-      const gy = 860;
-      const gw = 360;
-      const gh = 200;
+      const bx = 140;
+      const by = 1150;
+      const bw = 460;
+      const bh = 240;
 
       // Cyan Gridlines
-      ctx.strokeStyle = '#bae6fd';
+      ctx.strokeStyle = '#e0f2fe';
       ctx.lineWidth = 1;
       for (let i = 0; i <= 5; i++) {
-        const yLine = gy - (gh / 5) * i;
+        const yLine = by - (bh / 5) * i;
         ctx.beginPath();
-        ctx.moveTo(gx, yLine);
-        ctx.lineTo(gx + gw, yLine);
+        ctx.moveTo(bx, yLine);
+        ctx.lineTo(bx + bw, yLine);
         ctx.stroke();
       }
-      for (let j = 0; j <= 6; j++) {
-        const xLine = gx + (gw / 6) * j;
+      for (let j = 0; j <= 5; j++) {
+        const xLine = bx + (bw / 5) * j;
         ctx.beginPath();
-        ctx.moveTo(xLine, gy);
-        ctx.lineTo(xLine, gy - gh);
+        ctx.moveTo(xLine, by);
+        ctx.lineTo(xLine, by - bh);
         ctx.stroke();
       }
 
-      // Graph Axes (Blue)
+      // Graph Axes (Cyan Blue)
       ctx.strokeStyle = '#0284c7';
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.moveTo(gx, gy - gh);
-      ctx.lineTo(gx, gy);
-      ctx.lineTo(gx + gw, gy);
+      ctx.moveTo(bx, by - bh - 10);
+      ctx.lineTo(bx, by);
+      ctx.lineTo(bx + bw + 10, by);
       ctx.stroke();
 
       // Axis Labels
       ctx.fillStyle = '#0369a1';
       ctx.font = 'bold 16px sans-serif';
       ctx.direction = 'rtl';
-      ctx.fillText('حجم الفقرات', gx + 60, gy - gh - 12);
-      ctx.fillText('رقم الفقرات', gx + gw, gy + 30);
+      ctx.fillText('كمية المادة', bx + 60, by - bh - 18);
+      ctx.fillText('الخلايا', bx + bw + 40, by + 5);
 
-      // Curve
-      ctx.strokeStyle = '#e11d48';
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.moveTo(gx + 30, gy - 40);
-      ctx.lineTo(gx + 120, gy - 90);
-      ctx.lineTo(gx + 220, gy - 160);
-      ctx.lineTo(gx + 320, gy - 30);
-      ctx.stroke();
+      // Bars:
+      // Bar A (Cellulose blue + Suberin pink)
+      ctx.fillStyle = '#e0f2fe';
+      ctx.strokeStyle = '#0284c7';
+      ctx.lineWidth = 1.5;
+      ctx.fillRect(bx + 40, by - 140, 40, 140);
+      ctx.strokeRect(bx + 40, by - 140, 40, 140);
+      ctx.fillStyle = '#fce7f3';
+      ctx.strokeStyle = '#db2777';
+      ctx.fillRect(bx + 80, by - 70, 40, 70);
+      ctx.strokeRect(bx + 80, by - 70, 40, 70);
 
-      // Points (ل), (م), (ن)
+      // Bar B (Cellulose blue tall)
+      ctx.fillStyle = '#e0f2fe';
+      ctx.strokeStyle = '#0284c7';
+      ctx.fillRect(bx + 150, by - 210, 45, 210);
+      ctx.strokeRect(bx + 150, by - 210, 45, 210);
+
+      // Bar C (Cellulose blue + Lignin green)
+      ctx.fillStyle = '#e0f2fe';
+      ctx.fillRect(bx + 230, by - 140, 40, 140);
+      ctx.strokeRect(bx + 230, by - 140, 40, 140);
+      ctx.fillStyle = '#dcfce7';
+      ctx.strokeStyle = '#16a34a';
+      ctx.fillRect(bx + 270, by - 210, 40, 210);
+      ctx.strokeRect(bx + 270, by - 210, 40, 210);
+
+      // Bar D (Cellulose blue + Cutin yellow)
+      ctx.fillStyle = '#e0f2fe';
+      ctx.strokeStyle = '#0284c7';
+      ctx.fillRect(bx + 345, by - 140, 40, 140);
+      ctx.strokeRect(bx + 345, by - 140, 40, 140);
+      ctx.fillStyle = '#fef9c3';
+      ctx.strokeStyle = '#ca8a04';
+      ctx.fillRect(bx + 385, by - 70, 40, 70);
+      ctx.strokeRect(bx + 385, by - 70, 40, 70);
+
+      // Labels (A), (B), (C), (D)
       ctx.fillStyle = '#1e293b';
       ctx.font = 'bold 18px sans-serif';
-      ctx.beginPath();
-      ctx.arc(gx + 120, gy - 90, 6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillText('(ل)', gx + 120, gy - 105);
-
-      ctx.beginPath();
-      ctx.arc(gx + 220, gy - 160, 6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillText('(م)', gx + 220, gy - 175);
-
-      ctx.beginPath();
-      ctx.arc(gx + 320, gy - 30, 6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillText('(ن)', gx + 320, gy - 45);
+      ctx.fillText('(A)', bx + 80, by + 28);
+      ctx.fillText('(B)', bx + 172, by + 28);
+      ctx.fillText('(C)', bx + 270, by + 28);
+      ctx.fillText('(D)', bx + 385, by + 28);
       ctx.restore();
 
       // ========================================================
-      // FAINT WATERMARKS (The exact teacher phone number & name)
+      // FAINT WATERMARKS (Crossing container and bar chart)
       // ========================================================
       ctx.save();
       // 1. Right Margin Phone Number Watermark (01143387848)
       ctx.fillStyle = 'rgba(180, 185, 195, 0.45)';
       ctx.font = 'bold 22px sans-serif';
       ctx.direction = 'ltr';
-      ctx.fillText('01143387848 / 01099234851', 30, 750);
-      ctx.fillText('01143387848 / 01099234851', 30, 1200);
+      ctx.fillText('01143387848 / 01099234851', 30, 950);
+      ctx.fillText('01143387848 / 01099234851', 30, 1350);
 
-      // 2. Large Diagonal Faint Background Watermark
-      ctx.translate(600, 800);
-      ctx.rotate((-35 * Math.PI) / 180);
-      ctx.fillStyle = 'rgba(200, 205, 215, 0.35)';
-      ctx.font = 'bold 54px sans-serif';
+      // 2. Large Diagonal Faint Background Watermark crossing the whole document
+      ctx.translate(600, 750);
+      ctx.rotate((-32 * Math.PI) / 180);
+      ctx.fillStyle = 'rgba(195, 202, 214, 0.38)';
+      ctx.font = 'bold 50px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('أ / محمد الشناوي - 01143387848', 0, -100);
-      ctx.fillText('مذكرات الأحياء للثانوية العامة 2026', 0, 60);
-      ctx.fillText('أ / محمد الشناوي - 01143387848', 0, 220);
+      ctx.fillText('أ / محمد الشناوي - 01143387848', 0, -420);
+      ctx.fillText('مذكرات الأحياء للثانوية العامة 2026', 0, -200);
+      ctx.fillText('أ / محمد الشناوي - 01143387848', 0, 80);
+      ctx.fillText('مذكرات الأحياء للثانوية العامة 2026', 0, 320);
       ctx.restore();
 
       const blob = await new Promise<Blob>((res) => canvas.toBlob((b) => res(b!), 'image/png'));
