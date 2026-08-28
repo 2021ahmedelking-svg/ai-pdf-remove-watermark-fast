@@ -1,0 +1,6 @@
+{
+  "name": "PDF Watermark Remover AI",
+  "description": "Advanced AI-powered PDF watermark remover with automated detection, vector artifact stripping, split-screen before/after preview, and multi-page export.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
