@@ -1,12 +1,24 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { BoundingBox, LanguageStrings } from '../types';
-import { ZoomIn, ZoomOut, Maximize2, SplitSquareVertical, Columns, Eye, Layers, Sparkles } from 'lucide-react';
+import {
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+  SplitSquareVertical,
+  Columns,
+  Eye,
+  Layers,
+  Sparkles,
+  SquareDashed,
+  EyeOff
+} from 'lucide-react';
 
 interface BeforeAfterSliderProps {
   originalImage: string;
   cleanedImage: string | null;
   detectedWatermarks: BoundingBox[];
   showBoundingBoxes: boolean;
+  onToggleShowBoundingBoxes?: () => void;
   t: LanguageStrings;
   isProcessing: boolean;
   onSelectBox?: (boxId: string) => void;
@@ -19,6 +31,7 @@ export const BeforeAfterSlider: React.FC<BeforeAfterSliderProps> = ({
   cleanedImage,
   detectedWatermarks,
   showBoundingBoxes,
+  onToggleShowBoundingBoxes,
   t,
   isProcessing,
   onSelectBox,
@@ -127,35 +140,64 @@ export const BeforeAfterSlider: React.FC<BeforeAfterSliderProps> = ({
           </button>
         </div>
 
-        {/* Zoom Controls */}
-        <div className="flex items-center gap-1 bg-white dark:bg-slate-800 p-1 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-2xs">
-          <button
-            type="button"
-            onClick={() => setZoom((z) => Math.max(50, z - 25))}
-            className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition"
-            title={t.zoomOut}
-          >
-            <ZoomOut className="w-3.5 h-3.5" />
-          </button>
-          <span className="text-xs font-mono font-bold text-slate-700 dark:text-slate-200 px-2 min-w-[42px] text-center">
-            {zoom}%
-          </span>
-          <button
-            type="button"
-            onClick={() => setZoom((z) => Math.min(200, z + 25))}
-            className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition"
-            title={t.zoomIn}
-          >
-            <ZoomIn className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setZoom(100)}
-            className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition"
-            title={t.fitPage}
-          >
-            <Maximize2 className="w-3.5 h-3.5" />
-          </button>
+        {/* Right Tools: Bounding Box Toggle + Zoom Controls */}
+        <div className="flex items-center gap-2">
+          {/* Bounding Box Toggle */}
+          {onToggleShowBoundingBoxes && detectedWatermarks.length > 0 && (
+            <button
+              type="button"
+              onClick={onToggleShowBoundingBoxes}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition border ${
+                showBoundingBoxes
+                  ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300'
+                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
+              }`}
+              title="إظهار أو إخفاء إشارات المربعات حول العلامات المكتشفة"
+            >
+              {showBoundingBoxes ? (
+                <>
+                  <EyeOff className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                  <span className="hidden md:inline">إخفاء المربعات</span>
+                </>
+              ) : (
+                <>
+                  <SquareDashed className="w-3.5 h-3.5 text-slate-500" />
+                  <span className="hidden md:inline">إظهار المربعات</span>
+                </>
+              )}
+            </button>
+          )}
+
+          {/* Zoom Controls */}
+          <div className="flex items-center gap-1 bg-white dark:bg-slate-800 p-1 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-2xs">
+            <button
+              type="button"
+              onClick={() => setZoom((z) => Math.max(50, z - 25))}
+              className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition"
+              title={t.zoomOut}
+            >
+              <ZoomOut className="w-3.5 h-3.5" />
+            </button>
+            <span className="text-xs font-mono font-bold text-slate-700 dark:text-slate-200 px-2 min-w-[42px] text-center">
+              {zoom}%
+            </span>
+            <button
+              type="button"
+              onClick={() => setZoom((z) => Math.min(200, z + 25))}
+              className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition"
+              title={t.zoomIn}
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setZoom(100)}
+              className="p-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition"
+              title={t.fitPage}
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -197,7 +239,7 @@ export const BeforeAfterSlider: React.FC<BeforeAfterSliderProps> = ({
                 className="w-full h-auto block pointer-events-none"
               />
 
-              {/* Bounding Boxes on Original Layer */}
+              {/* Bounding Boxes on Original Layer (Only shown if user explicitly wants) */}
               {showBoundingBoxes &&
                 detectedWatermarks.map((box) => (
                   <div
@@ -215,8 +257,8 @@ export const BeforeAfterSlider: React.FC<BeforeAfterSliderProps> = ({
                     title={box.label || 'منطقة علامة مائية'}
                     className={`absolute cursor-pointer border-2 transition-all rounded-lg flex items-start justify-end p-1 ${
                       box.selected !== false
-                        ? 'border-indigo-500 bg-indigo-500/20 ring-2 ring-indigo-400/50'
-                        : 'border-slate-400/60 bg-slate-400/10'
+                        ? 'border-indigo-500 bg-indigo-500/15 ring-2 ring-indigo-400/40'
+                        : 'border-slate-400/50 bg-slate-400/10'
                     }`}
                   >
                     {box.label && (

@@ -102,7 +102,7 @@ export default function App() {
   });
 
   // UI Modals & Overlays
-  const [showBoundingBoxes, setShowBoundingBoxes] = useState<boolean>(true);
+  const [showBoundingBoxes, setShowBoundingBoxes] = useState<boolean>(false);
   const [showManualBrush, setShowManualBrush] = useState<boolean>(false);
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [showHowItWorks, setShowHowItWorks] = useState<boolean>(false);
@@ -798,6 +798,7 @@ export default function App() {
                     cleanedImage={currentPage.cleanedCanvasDataUrl}
                     detectedWatermarks={currentPage.detectedWatermarks}
                     showBoundingBoxes={showBoundingBoxes}
+                    onToggleShowBoundingBoxes={() => setShowBoundingBoxes((prev) => !prev)}
                     t={t}
                     isProcessing={currentPage.isProcessing}
                     onSelectBox={handleToggleBox}

@@ -7,20 +7,24 @@ export const PRESET_CONFIGS: Record<WatermarkPresetType, Partial<RemovalConfig>>
   educational_exams: {
     preset: 'educational_exams',
     engine: 'ai_smart',
+    intensityLevel: 'balanced',
+    faintLinksDetection: true,
     cleanScope: 'full_page',
     cleanMargins: true,
     preserveAllColorsAndPhotos: true,
     targetColorMode: 'faint_gray_only',
-    lightnessThreshold: 168,
-    colorSensitivity: 80,
+    lightnessThreshold: 165,
+    colorSensitivity: 85,
     preserveTextSharpness: true,
     preserveRedQuestions: true,
     enhanceContrast: false,
-    removeBackgroundTint: false, // Keep yellow/pink question cards intact!
+    removeBackgroundTint: false,
   },
   margin_numbers: {
     preset: 'margin_numbers',
     engine: 'color_threshold',
+    intensityLevel: 'balanced',
+    faintLinksDetection: true,
     cleanScope: 'full_page',
     cleanMargins: true,
     preserveAllColorsAndPhotos: true,
@@ -35,7 +39,9 @@ export const PRESET_CONFIGS: Record<WatermarkPresetType, Partial<RemovalConfig>>
   color_stamps: {
     preset: 'color_stamps',
     engine: 'color_threshold',
-    cleanScope: 'selected_regions_only',
+    intensityLevel: 'balanced',
+    faintLinksDetection: true,
+    cleanScope: 'full_page',
     cleanMargins: true,
     preserveAllColorsAndPhotos: true,
     targetColorMode: 'all_faint_overlays',
@@ -49,6 +55,8 @@ export const PRESET_CONFIGS: Record<WatermarkPresetType, Partial<RemovalConfig>>
   confidential_draft: {
     preset: 'confidential_draft',
     engine: 'ai_smart',
+    intensityLevel: 'balanced',
+    faintLinksDetection: false,
     cleanScope: 'full_page',
     cleanMargins: false,
     preserveAllColorsAndPhotos: true,
@@ -63,19 +71,22 @@ export const PRESET_CONFIGS: Record<WatermarkPresetType, Partial<RemovalConfig>>
   aggressive_deep: {
     preset: 'aggressive_deep',
     engine: 'color_threshold',
+    intensityLevel: 'ultra_faint',
+    faintLinksDetection: true,
     cleanScope: 'full_page',
     cleanMargins: true,
-    preserveAllColorsAndPhotos: false,
+    preserveAllColorsAndPhotos: true,
     targetColorMode: 'all_faint_overlays',
-    lightnessThreshold: 140,
+    lightnessThreshold: 145,
     colorSensitivity: 95,
     preserveTextSharpness: true,
     preserveRedQuestions: true,
     enhanceContrast: true,
-    removeBackgroundTint: true,
+    removeBackgroundTint: false,
   },
   custom: {
     preset: 'custom',
+    faintLinksDetection: true,
   },
 };
 
@@ -93,15 +104,19 @@ export function loadImage(dataUrl: string): Promise<HTMLImageElement> {
 }
 
 /**
- * Advanced Document Watermark Removal Engine (WatermarkRemover.io Level).
+ * Advanced Multi-Surface Document Watermark & Faint Link Removal Engine.
  * 
- * CORE ALGORITHM: Stroke-Aware Adaptive Gradient Reconstruction & Morphological Shield (SAAGR v2)
+ * Capable of automatically removing:
+ * 1. Faint gray text / diagonal teacher names / phone numbers across white paper.
+ * 2. Translucent Telegram links (https://t.me/...) across solid colored banners (e.g. blue/cyan headers).
+ * 3. Faint watermark overlays across light-blue / gradient containers and headers.
+ * 4. Translucent watermarks spanning across multi-colored 3D biology diagrams and charts.
  * 
- * Enhancements:
- * 1. Residual Fragment Extinction (Hysteresis & Stroke Tracing): Eliminates faint tails, isolated digits, and edge artifacts.
- * 2. Context-Aware Container Background Inpainting: Restores watermarks inside light-blue/cream boxes directly to the box's native color.
- * 3. 1px Precise Gradient Anti-Aliasing Guard: Prevents font thinning without leaving gray islands around letters or dotted lines.
- * 4. Biology Diagrams & Bar Chart Color Shield: 100% preserves colored bars (cyan, pink, green, yellow), graph gridlines, and red headers.
+ * 100% preserves:
+ * - High-contrast text (Arabic / English black or white ink).
+ * - Saturated illustrations, cell diagrams, 3D anatomical blocks.
+ * - Red question numbers (١), (٢), (٣), (01), (02).
+ * - Colored bar charts (Cutin yellow, Suberin pink, Lignin green, Cellulose blue).
  */
 export async function cleanImageWithColorThreshold(
   sourceDataUrl: string,
@@ -120,8 +135,8 @@ export async function cleanImageWithColorThreshold(
   const data = imageData.data;
 
   const {
-    lightnessThreshold = 168,
-    colorSensitivity = 80,
+    intensityLevel = 'balanced',
+    faintLinksDetection = true,
     preserveTextSharpness = true,
     preserveRedQuestions = true,
     preserveAllColorsAndPhotos = true,
@@ -131,6 +146,14 @@ export async function cleanImageWithColorThreshold(
     cleanScope = 'full_page',
     enhanceContrast = false,
   } = config;
+
+  // Calibrate lightness and sensitivity based on intensity level
+  let effectiveThreshold = config.lightnessThreshold ?? 165;
+  if (intensityLevel === 'gentle') {
+    effectiveThreshold = Math.max(178, effectiveThreshold);
+  } else if (intensityLevel === 'ultra_faint') {
+    effectiveThreshold = Math.min(148, effectiveThreshold);
+  }
 
   const w = canvas.width;
   const h = canvas.height;
@@ -149,35 +172,31 @@ export async function cleanImageWithColorThreshold(
           }))
       : null;
 
-  // Margin boundaries (Left 12%, Right 12%, Top 6%, Bottom 6%)
-  const marginXLeft = Math.floor(w * 0.12);
-  const marginXRight = Math.floor(w * 0.88);
-  const marginYTop = Math.floor(h * 0.06);
-  const marginYBottom = Math.floor(h * 0.94);
+  // Margin boundaries (Left 14%, Right 14%, Top 7%, Bottom 7%)
+  const marginXLeft = Math.floor(w * 0.14);
+  const marginXRight = Math.floor(w * 0.86);
+  const marginYTop = Math.floor(h * 0.07);
+  const marginYBottom = Math.floor(h * 0.93);
 
-  const grayThreshold = Math.max(125, Math.min(245, lightnessThreshold));
-
-  // Protection Map:
-  // 0: Unprotected / Background / Candidate Watermark
-  // 1: Anti-Aliasing Edge (1px gradient edge of text)
-  // 2: Dark Ink Core (letters, arrows, punctuation, dotted lines)
-  // 3: Graphic / Diagram / Colored Object Core (vertebra, bars, cyan lines, red question badges)
+  // 0: Unclassified / Background / Potential Watermark
+  // 1: Anti-Aliasing Text Halos (protected edge)
+  // 2: Dark / Sharp Ink Core (Arabic letters, punctuation, 1px lines, arrows)
+  // 3: Graphic / Diagram / High Contrast Content Core (3D biology organs, badges, colored bars)
   const protection = new Uint8Array(totalPixels);
 
-  // Watermark Candidate Map:
   // 0: No watermark
-  // 1: High-Confidence Watermark Seed
-  // 2: Secondary / Faint Watermark Fragment (cleared if connected to seed)
+  // 1: High-confidence watermark candidate
+  // 2: Secondary / faint tail (promoted if connected to seed)
   const watermarkMap = new Uint8Array(totalPixels);
 
-  // Luminance and Background Map
+  // Color & Luminance Maps
   const lumCache = new Float32Array(totalPixels);
   const bgR = new Uint8ClampedArray(totalPixels);
   const bgG = new Uint8ClampedArray(totalPixels);
   const bgB = new Uint8ClampedArray(totalPixels);
 
   // =========================================================================
-  // PASS 1: FEATURE DETECTION, COLOR / TEXT CLASSIFICATION & BG ESTIMATION
+  // PASS 1: FEATURE DETECTION, COLOR ANALYSIS, PROTECTED CORES & BG ESTIMATION
   // =========================================================================
   for (let y = 0; y < h; y++) {
     const isMarginY = y < marginYTop || y > marginYBottom;
@@ -191,7 +210,7 @@ export async function cleanImageWithColorThreshold(
       const b = data[idx + 2];
       const a = data[idx + 3];
 
-      // Default background estimator is pure white
+      // Default background is crisp paper white
       bgR[pIdx] = 255;
       bgG[pIdx] = 255;
       bgB[pIdx] = 255;
@@ -202,12 +221,12 @@ export async function cleanImageWithColorThreshold(
         continue;
       }
 
-      // Fast luminance (Rec. 709)
+      // Perceptual Luminance
       const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
       lumCache[pIdx] = lum;
 
       // Pure paper background
-      if (r >= 253 && g >= 253 && b >= 253) {
+      if (r >= 252 && g >= 252 && b >= 252) {
         protection[pIdx] = 0;
         continue;
       }
@@ -227,60 +246,56 @@ export async function cleanImageWithColorThreshold(
       // 1. PHOTOS, BIOLOGY DIAGRAMS, AND COLORED GRAPHICS SHIELD
       // -------------------------------------------------------------
       if (preserveAllColorsAndPhotos) {
-        // A. Red Question Markers e.g. (١), (٢), (٣), (1), (2), question markers ١٣, ١٤, red lines
+        // A. Red Question Markers e.g. (١), (٢), (٣), red boxes, red question headings
         const isRedBadge =
           preserveRedQuestions &&
-          diffRed >= 18 &&
-          r >= 95 &&
-          g <= 130 &&
-          b <= 130;
+          diffRed >= 16 &&
+          r >= 90 &&
+          g <= 140 &&
+          b <= 140;
 
-        // B. Cyan / Light-Blue Graph Gridlines & Axis Lines
-        // In bar charts & graphs, gridlines have subtle cyan/blue tint (e.g. r:180-230, g:225-245, b:240-255)
+        // B. Cyan / Light-Blue Graph Gridlines & Axis Lines & Light-Blue Badges
         const isGraphGridOrAxis =
-          (diffBlue >= 5 || (b >= r + 6 && g >= r + 4)) &&
-          b >= 130 &&
-          lum >= 110;
+          (diffBlue >= 6 || (b >= r + 6 && g >= r + 4)) &&
+          b >= 120 &&
+          lum >= 100;
 
-        // C. Saturated Illustration / Photo Pixels (vertebra yellow bone, purple facets, colored bars: pink/green/yellow)
-        const isColoredIllustration = chroma >= 12;
+        // C. Saturated Illustration / 3D Biological Diagrams (vertebra, cells, organ colors)
+        const isColoredIllustration = chroma >= 14;
 
-        // D. Flat Tinted Background Containers (Light blue question box, light cream card)
-        // If it's a smooth light tint container, note its background color for seamless inpainting!
+        // D. Flat Tinted Background Containers (Light blue question container, cream/yellow cards)
         const isTintedContainerBackground =
           !removeBackgroundTint &&
-          chroma >= 4 &&
-          chroma < 12 &&
-          lum >= 215 &&
+          chroma >= 3 &&
+          chroma < 14 &&
+          lum >= 210 &&
           !isMarginPixel;
 
         if (isTintedContainerBackground) {
-          // Record this container's background color so any watermark inside it restores to this tint
           bgR[pIdx] = r;
           bgG[pIdx] = g;
           bgB[pIdx] = b;
-          // Unmarked as protection core so faint watermark crossing it can be cleaned back to this tint!
         }
 
         if (isRedBadge || isGraphGridOrAxis || isColoredIllustration) {
-          protection[pIdx] = 3; // Graphic Protected Core
+          protection[pIdx] = 3; // Protected Graphic Core
           continue;
         }
       }
 
       // -------------------------------------------------------------
-      // 2. DARK TEXT & LINE CORE (Solid Arabic letters, punctuation, 1px arrows X/Y)
+      // 2. DARK INK CORE (Arabic words, English text, black borders, pointers)
       // -------------------------------------------------------------
       if (preserveTextSharpness) {
-        // Solid dark ink (Arabic words, English text, black borders)
-        if (lum <= 145 && chroma < 32) {
-          protection[pIdx] = 2; // Ink Core
+        // True Dark Arabic & English Text
+        if (lum <= 140 && chroma < 30) {
+          protection[pIdx] = 2; // Dark Ink Core
           continue;
         }
 
-        // Dotted underline line detection (..........) & thin 1px arrows (X, Y)
-        if (lum <= 182 && chroma < 18 && !isMarginPixel) {
-          protection[pIdx] = 2; // Ink Core for dotted response lines
+        // Dotted lines e.g. (..........) & thin 1px arrows
+        if (lum <= 175 && chroma < 16 && !isMarginPixel) {
+          protection[pIdx] = 2;
           continue;
         }
       }
@@ -288,15 +303,13 @@ export async function cleanImageWithColorThreshold(
   }
 
   // =========================================================================
-  // PASS 2: PRECISE 1-PIXEL GRADIENT ANTI-ALIASING SHIELD
-  // Only protects subpixel transitions of actual text, without shielding watermarks!
+  // PASS 2: 1-PIXEL GRADIENT ANTI-ALIASING HALO GUARD
   // =========================================================================
   for (let y = 1; y < h - 1; y++) {
     for (let x = 1; x < w - 1; x++) {
       const pIdx = y * w + x;
       if (protection[pIdx] !== 0) continue;
 
-      // Check immediate 4-connected neighbors for ink or graphic cores
       const up = protection[(y - 1) * w + x];
       const down = protection[(y + 1) * w + x];
       const left = protection[y * w + (x - 1)];
@@ -306,21 +319,19 @@ export async function cleanImageWithColorThreshold(
       const isTouchingGraphic = up === 3 || down === 3 || left === 3 || right === 3;
 
       if (isTouchingInk) {
-        // Only mark as anti-aliasing if the pixel is legitimately an ink edge (dark enough, lum < 172)
-        // If it's faint gray (lum >= 175), it's a watermark residue passing near the text!
-        if (lumCache[pIdx] < 172) {
+        if (lumCache[pIdx] < 170) {
           protection[pIdx] = 1; // Anti-Aliasing Edge
         }
       } else if (isTouchingGraphic) {
-        if (lumCache[pIdx] < 190) {
-          protection[pIdx] = 1; // Graphic Edge
+        if (lumCache[pIdx] < 192) {
+          protection[pIdx] = 1;
         }
       }
     }
   }
 
   // =========================================================================
-  // PASS 3: DUAL-THRESHOLD WATERMARK IDENTIFICATION (Seeds & Faint Tails)
+  // PASS 3: WATERMARK DETECTION ACROSS PAPER & COLORED BANNERS
   // =========================================================================
   for (let y = 0; y < h; y++) {
     const isMarginY = y < marginYTop || y > marginYBottom;
@@ -349,76 +360,113 @@ export async function cleanImageWithColorThreshold(
       const minRGB = Math.min(r, g, b);
       const chroma = maxRGB - minRGB;
 
-      // MODE 1: Margin Sweep Only
-      if (targetColorMode === 'margin_sweep_only') {
-        if (cleanMargins && isMarginPixel && lum >= 105 && chroma < 25) {
-          watermarkMap[pIdx] = 1; // High confidence seed
-        }
+      // Standard Watermark Detection on Paper & Headers
+      const isFaintWatermarkSeed =
+        lum >= effectiveThreshold &&
+        lum <= 251 &&
+        chroma < 18;
+
+      const isFaintWatermarkTail =
+        lum >= effectiveThreshold - 18 &&
+        lum <= 251 &&
+        chroma < 20;
+
+      const isMarginNumber =
+        cleanMargins &&
+        isMarginPixel &&
+        lum >= 105 &&
+        lum <= 251 &&
+        chroma < 28;
+
+      if (isFaintWatermarkSeed || isMarginNumber) {
+        watermarkMap[pIdx] = 1; // Seed
+      } else if (isFaintWatermarkTail) {
+        watermarkMap[pIdx] = 2; // Candidate tail
       }
 
-      // MODE 2: Faint Gray Only (Educational Exam Watermark Standard)
-      else if (targetColorMode === 'faint_gray_only') {
-        // High-confidence watermark seed (distinct faint overlay)
-        const isFaintWatermarkSeed =
-          lum >= grayThreshold &&
-          lum <= 251 &&
-          chroma < 16;
-
-        // Faint watermark tail / residual fragment (lower threshold for continuous strokes)
-        const isFaintWatermarkTail =
-          lum >= grayThreshold - 15 &&
-          lum <= 251 &&
-          chroma < 18;
-
-        const isMarginNumber =
-          cleanMargins &&
-          isMarginPixel &&
-          lum >= 115 &&
-          lum <= 251 &&
-          chroma < 25;
-
-        if (isFaintWatermarkSeed || isMarginNumber) {
-          watermarkMap[pIdx] = 1; // Seed
-        } else if (isFaintWatermarkTail) {
-          watermarkMap[pIdx] = 2; // Candidate tail
-        }
-      }
-
-      // MODE 3: All Faint Overlays (Including translucent colored stamps)
-      else if (targetColorMode === 'all_faint_overlays') {
-        const isAnyFaintWatermark =
-          lum >= grayThreshold &&
-          lum <= 251 &&
-          (chroma < 35 || r - g > 12 || b - r > 12);
-
-        const isMarginNumber =
-          cleanMargins &&
-          isMarginPixel &&
-          lum >= 110 &&
-          lum <= 251;
-
-        if (isAnyFaintWatermark || isMarginNumber) {
+      // If All Faint Overlays or Color Stamps mode
+      if (targetColorMode === 'all_faint_overlays' || intensityLevel === 'ultra_faint') {
+        if (lum >= effectiveThreshold - 10 && lum <= 251 && (chroma < 35 || r - g > 12)) {
           watermarkMap[pIdx] = 1;
         }
-      }
-
-      // Optional: Background Wash Removal
-      if (removeBackgroundTint && lum >= 195 && lum <= 252) {
-        watermarkMap[pIdx] = 1;
       }
     }
   }
 
   // =========================================================================
-  // PASS 4: HYSTERESIS CONNECTIVITY SWEEP
-  // Promotes candidate tails (watermarkMap === 2) that connect to high-confidence seeds
+  // PASS 4: SPECIALIZED TRANSLUCENT BANNER & TELEGRAM LINK EXTRACTION
+  // (Detects faint https://t.me/... or teacher names across colored banners like Image 2)
+  // =========================================================================
+  if (faintLinksDetection) {
+    // Scan horizontal bands (rows) to find uniform colored banners with translucent text overlays
+    const bandHeight = 24;
+    for (let by = 0; by < h; by += bandHeight) {
+      const ey = Math.min(h, by + bandHeight);
+
+      // Sample middle region to find dominant banner color
+      let bannerR = 0;
+      let bannerG = 0;
+      let bannerB = 0;
+      let sampleCount = 0;
+
+      for (let y = by; y < ey; y += 4) {
+        for (let x = Math.floor(w * 0.2); x < Math.floor(w * 0.8); x += 10) {
+          const p = (y * w + x) * 4;
+          const pr = data[p];
+          const pg = data[p + 1];
+          const pb = data[p + 2];
+          const pChroma = Math.max(pr, pg, pb) - Math.min(pr, pg, pb);
+
+          // If this is a saturated colored banner (e.g. Blue banner #107CB7)
+          if (pChroma > 25 && pr < 240) {
+            bannerR += pr;
+            bannerG += pg;
+            bannerB += pb;
+            sampleCount++;
+          }
+        }
+      }
+
+      if (sampleCount > 15) {
+        const avgR = Math.round(bannerR / sampleCount);
+        const avgG = Math.round(bannerG / sampleCount);
+        const avgB = Math.round(bannerB / sampleCount);
+
+        // Check pixels in this banner: Any pixel that deviates slightly from avg (translucent link) is wiped!
+        for (let y = by; y < ey; y++) {
+          for (let x = 0; x < w; x++) {
+            const pIdx = y * w + x;
+            if (protection[pIdx] === 3 || protection[pIdx] === 2) continue; // Keep sharp white text / badges!
+
+            const idx = pIdx * 4;
+            const r = data[idx];
+            const g = data[idx + 1];
+            const b = data[idx + 2];
+
+            const colorDiff = Math.abs(r - avgR) + Math.abs(g - avgG) + Math.abs(b - avgB);
+
+            // Translucent watermark on banner produces subtle color difference (typically 8 to 45)
+            // Legitimate text produces huge difference (> 100) or has high white brightness
+            if (colorDiff >= 6 && colorDiff <= 48) {
+              watermarkMap[pIdx] = 1;
+              bgR[pIdx] = avgR;
+              bgG[pIdx] = avgG;
+              bgB[pIdx] = avgB;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // =========================================================================
+  // PASS 5: HYSTERESIS CONNECTIVITY SWEEP
   // =========================================================================
   const sweepRadius = 2;
   for (let y = 1; y < h - 1; y++) {
     for (let x = 1; x < w - 1; x++) {
       const pIdx = y * w + x;
       if (watermarkMap[pIdx] === 2) {
-        // Check if within sweep radius of a high-confidence watermark seed
         let hasConnectedSeed = false;
         for (let dy = -sweepRadius; dy <= sweepRadius && !hasConnectedSeed; dy++) {
           const ny = y + dy;
@@ -432,15 +480,14 @@ export async function cleanImageWithColorThreshold(
           }
         }
         if (hasConnectedSeed) {
-          watermarkMap[pIdx] = 1; // Promote and clean!
+          watermarkMap[pIdx] = 1;
         }
       }
     }
   }
 
   // =========================================================================
-  // PASS 5: CONTEXT-AWARE INPAINTING & FINAL RECONSTRUCTION
-  // Cleans watermark pixels directly to local background (pure white or container tint)
+  // PASS 6: INPAINTING & SEAMLESS RECONSTRUCTION
   // =========================================================================
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
@@ -453,12 +500,12 @@ export async function cleanImageWithColorThreshold(
       const b = data[idx + 2];
       const lum = lumCache[pIdx];
 
-      // Protected Graphic or Anti-Aliasing Halo: Preserve!
+      // Protected Graphic or Anti-Aliasing Halo: Keep intact!
       if (pStatus === 3 || pStatus === 1) {
         continue;
       }
 
-      // Dark Ink Core: Crisp finish if contrast enhancement is requested
+      // Dark Ink Core: Crisp finish
       if (pStatus === 2) {
         if (enhanceContrast && lum <= 100) {
           data[idx] = Math.max(0, r - 20);
@@ -470,9 +517,6 @@ export async function cleanImageWithColorThreshold(
 
       // Clean Watermark Pixels
       if (watermarkMap[pIdx] === 1) {
-        // Context-aware background inpainting:
-        // If inside a light-blue or light-yellow container, match container's native tint!
-        // Otherwise, restore to crisp paper white (255, 255, 255).
         const targetR = bgR[pIdx] < 254 ? bgR[pIdx] : 255;
         const targetG = bgG[pIdx] < 254 ? bgG[pIdx] : 255;
         const targetB = bgB[pIdx] < 254 ? bgB[pIdx] : 255;

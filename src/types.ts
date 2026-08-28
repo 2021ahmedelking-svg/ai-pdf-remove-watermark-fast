@@ -55,9 +55,13 @@ export interface PDFDocumentState {
   batchProgress: number; // 0 - 100
 }
 
+export type RemovalIntensityLevel = 'gentle' | 'balanced' | 'ultra_faint';
+
 export interface RemovalConfig {
   engine: RemovalEngineType;
   preset: WatermarkPresetType;
+  intensityLevel?: RemovalIntensityLevel;
+  faintLinksDetection?: boolean; // Specifically strip translucent t.me, URLs, and faint background names across headers/diagrams
   cleanScope: 'full_page' | 'selected_regions_only';
   cleanMargins: boolean;
   preserveAllColorsAndPhotos: boolean; // 100% protect photos, colored diagrams, badges (01,02,03,04)
